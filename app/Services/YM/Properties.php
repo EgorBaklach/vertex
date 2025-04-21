@@ -71,10 +71,6 @@ class Properties extends MSAbstract
 
                     foreach($properties as $property)
                     {
-                        // TODO DELETE THIS
-
-                        if($property['id'] === 60035061) Log::channel('ym')->info(['YES!!! ITS PROPERTY 60035061', json_encode($property)]);
-
                         // START
 
                         $hash = implode('_', [$cid, $property['id']]);
