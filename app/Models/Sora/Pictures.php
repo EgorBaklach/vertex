@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @property int $id
- * @property string|null $status
+ * @property string|null $active
  * @property string $article
  * @property string|null $selectGen
  * @property string|null $svg
@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Model;
  * @method static Builder<static>|Pictures whereArticle($value)
  * @method static Builder<static>|Pictures whereId($value)
  * @method static Builder<static>|Pictures whereSelectGen($value)
- * @method static Builder<static>|Pictures whereStatus($value)
+ * @method static Builder<static>|Pictures whereActive($value)
  * @method static Builder<static>|Pictures whereSvg($value)
  * @mixin Builder
  */
@@ -29,7 +29,7 @@ class Pictures extends Model
     protected $connection = 'sora';
     protected $table = 'pictures';
     protected $fillable = [
-        'status',
+        'active',
         'article',
         'selectGen',
         'svg'
