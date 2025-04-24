@@ -1,8 +1,8 @@
 <?php namespace App\Filament\Forms\Components;
 
-use Closure;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 
 class ImageUpload extends FileUpload
 {
@@ -15,6 +15,6 @@ class ImageUpload extends FileUpload
 
     public function getUrl(): string
     {
-        return env('APP_URL').'storage/'.$this->getState()[0];
+        return Storage::disk('public')->url(Arr::first($this->getState()));
     }
 }

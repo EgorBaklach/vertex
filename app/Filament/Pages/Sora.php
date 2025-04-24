@@ -6,6 +6,8 @@ use App\Models\Sora\Pictures;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\StaticAction;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Storage;
 use Filament\Forms\Components\{ToggleButtons, Checkbox, Grid, Group, Hidden, TextInput};
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
@@ -41,15 +43,11 @@ class Sora extends Page implements HasForms
 
     protected function loadNextRecord(): void
     {
-        $this->form->fill(Pictures::query()->where('active', 'Y')->whereNull('selectGen')->first()->toArray());
-    }
+        /** @var Pictures $record */ $record = Pictures::query()->where('active', 'Y')->whereNull('selectGen')->first() ?? new Pictures;
 
-    private function photo(string $field, string $name, int $height, ?int $gen = null): ImageUpload
-    {
-        return ImageUpload::make($field)
-            ->afterStateHydrated(fn(ImageUpload $component) => $component->state(['sora/'.$this->data['article'].'/'.$this->data['article'].($gen ? '_'.$gen : '').'.'.($gen ? 'webp' : 'jpg')]))
-            ->imagePreviewHeight($height)
-            ->label($name);
+        foreach(Storage::disk('public')->allFiles('sora/'.$record->article) as $path) if(preg_match('/([^\/]+)\./i', $path, $match)) $record->{$match[1]} = $path;
+
+        $this->form->fill($record->toArray()); Log::channel('design')->info($record->toArray());
     }
 
     public function form(Form $form): Form
@@ -59,19 +57,19 @@ class Sora extends Page implements HasForms
         return $form
             ->columns(12)
             ->statePath('data')
-            ->schema([
+            ->schema(fn() => [
                 Group::make()
                     ->columnSpan(4)
                     ->schema([
-                        $this->photo('original', 'Основное изображение', 817),
+                        ImageUpload::make($this->data['article'])->imagePreviewHeight(817)->label('Основное изображение'),
                         TextInput::make('article')->label('Артикул')->disabled()->hiddenLabel(),
-                        Checkbox::make('svg')->formatStateUsing(fn($state) => $state === 'Y')->label('SVG приемлемо'),
+                        Checkbox::make('svg')->formatStateUsing(fn($state) => $state === 'Y' ? true : null)->label('SVG приемлемо'),
                         Hidden::make('id')
                     ]),
                 Group::make()
                     ->columnSpan(8)
                     ->schema(Arr::map(self::gens, fn($r) => Grid::make()->schema(Arr::map($r, fn($v) => Group::make()->schema([
-                        $this->photo('gen_'.$v, 'Gen '.$v, 350, $v),
+                        ImageUpload::make($this->data['article'].'_'.$v)->imagePreviewHeight(350)->label('Gen '.$v),
                         clone $toggle->options([$v => 'Выбрать Gen '.$v])
                     ])))))
             ]);
@@ -79,7 +77,7 @@ class Sora extends Page implements HasForms
 
     public function save(): void
     {
-        Log::channel('design')->info($this->form->getState());
+        Pictures::query()->upsert($this->form->getState(), []); $this->loadNextRecord();
 
         /*if (!$this->currentRecord) {
             Notification::make()
@@ -88,8 +86,6 @@ class Sora extends Page implements HasForms
                 ->send();
             return;
         }
-
-        $this->currentRecord->update($this->form->getState());
 
         Notification::make()
             ->success()
