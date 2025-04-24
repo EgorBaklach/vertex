@@ -1,15 +1,12 @@
-<?php
+<?php namespace App\Filament\Pages;
 
-namespace App\Filament\Pages;
-
+use App\Filament\Forms\Components\ImageUpload;
+use App\Helpers\Arr;
 use App\Models\Sora\Pictures;
-use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Grid;
-use Filament\Forms\Components\Group;
-use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\TextInput;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\StaticAction;
+use Filament\Forms\Components\{ToggleButtons, Checkbox, Grid, Group, Hidden, TextInput};
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
@@ -22,11 +19,20 @@ use Illuminate\Support\Facades\Log;
 class Sora extends Page implements HasForms
 {
     use InteractsWithForms;
+    use InteractsWithActions;
 
     protected static ?string $navigationIcon = 'heroicon-o-photo';
     protected static string $view = 'pages.sora-editor';
 
+    private ToggleButtons $toggle;
+
+    protected $listeners = [
+        'clearGen' => 'clear'
+    ];
+
     public ?array $data = [];
+
+    private const gens = [[1, 2], [3, 4]];
 
     public function mount(): void
     {
@@ -38,19 +44,18 @@ class Sora extends Page implements HasForms
         $this->form->fill(Pictures::query()->where('active', 'Y')->whereNull('selectGen')->first()->toArray());
     }
 
-    private function photo(FileUpload $upload, ?int $gen = null): FileUpload
+    private function photo(string $field, string $name, int $height, ?int $gen = null): ImageUpload
     {
-        return $upload
-            ->afterStateHydrated(fn(FileUpload $component) => $component->state(['sora/'.$this->data['article'].'/'.$this->data['article'].($gen ? '_'.$gen : '').'.'.($gen ? 'webp' : 'jpg')]))
-            ->multiple(false)
-            ->previewable()
-            ->disabled()
-            ->openable()
-            ->image();
+        return ImageUpload::make($field)
+            ->afterStateHydrated(fn(ImageUpload $component) => $component->state(['sora/'.$this->data['article'].'/'.$this->data['article'].($gen ? '_'.$gen : '').'.'.($gen ? 'webp' : 'jpg')]))
+            ->imagePreviewHeight($height)
+            ->label($name);
     }
 
     public function form(Form $form): Form
     {
+        $toggle = ToggleButtons::make('selectGen')->reactive()->afterStateUpdated(fn() => $this->mountAction('save'))->hiddenLabel();
+
         return $form
             ->columns(12)
             ->statePath('data')
@@ -58,25 +63,17 @@ class Sora extends Page implements HasForms
                 Group::make()
                     ->columnSpan(4)
                     ->schema([
-                        $this->photo(FileUpload::make('original')->imagePreviewHeight(756)->label('Основное изображение')),
-                        TextInput::make('article')->label('Артикул')->disabled(),
-                        Checkbox::make('svg_acceptable')->label('SVG приемлемо'),
+                        $this->photo('original', 'Основное изображение', 817),
+                        TextInput::make('article')->label('Артикул')->disabled()->hiddenLabel(),
+                        Checkbox::make('svg')->formatStateUsing(fn($state) => $state === 'Y')->label('SVG приемлемо'),
                         Hidden::make('id')
                     ]),
                 Group::make()
                     ->columnSpan(8)
-                    ->schema([
-                        Grid::make()
-                            ->schema([
-                                $this->photo(FileUpload::make('gen_1')->imagePreviewHeight(350)->label('Gen 1'), 1),
-                                $this->photo(FileUpload::make('gen_2')->imagePreviewHeight(350)->label('Gen 2'), 2)
-                            ]),
-                        Grid::make()
-                            ->schema([
-                                $this->photo(FileUpload::make('gen_3')->imagePreviewHeight(350)->label('Gen 3'), 3),
-                                $this->photo(FileUpload::make('gen_4')->imagePreviewHeight(350)->label('Gen 4'), 4)
-                            ]),
-                    ])
+                    ->schema(Arr::map(self::gens, fn($r) => Grid::make()->schema(Arr::map($r, fn($v) => Group::make()->schema([
+                        $this->photo('gen_'.$v, 'Gen '.$v, 350, $v),
+                        clone $toggle->options([$v => 'Выбрать Gen '.$v])
+                    ])))))
             ]);
     }
 
@@ -109,10 +106,31 @@ class Sora extends Page implements HasForms
         }*/
     }
 
-    protected function getSaveFormAction(): array
+    public function toggle(string $key): void
+    {
+        if(str_contains('1234', $key))
+        {
+            $this->data['selectGen'] = $key * 1; $this->mountAction('save');
+        }
+
+        if($key === 's') $this->data['svg'] = !$this->data['svg'];
+    }
+
+    public function clear(): void
+    {
+        $this->data['selectGen'] = null;
+    }
+
+    protected function getHeaderActions(): array
     {
         return [
-            Action::make('save')->submit('save')->label('Save')
+            Action::make('save')
+                ->modalCancelAction(fn(StaticAction $action) => $action->keyBindings(['Esc'])->dispatch('clearGen'))
+                ->modalSubmitAction(fn(StaticAction $action) => $action->keyBindings(['Enter']))
+                ->modalHeading('Подтвердите действие')
+                ->action(fn() => $this->save())
+                ->requiresConfirmation()
+                ->label('Сохранить')
         ];
     }
 }

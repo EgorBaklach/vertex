@@ -88,7 +88,6 @@ class ProductsResource extends Resource
     public static function form(Form $form): Form
     {
         return $form
-            ->live()
             ->columns([
                 'default' => 12,
                 'sm' => 12,
@@ -97,7 +96,7 @@ class ProductsResource extends Resource
                 'xl' => 12,
                 '2xl' => 12,
             ])
-            ->schema(fn(Get $get, Set $set) => [
+            ->schema(fn() => [
                 Select::make('active')->options(['Y' => 'Y'])->placeholder('N')->columnSpan(self::grid[2])->default('Y')->reactive()->label('Вкл:'),
                 Autocomplete::make('name')->setOptions(App::make(Patterns::class))->columnSpan(self::grid[10])->required()->label('Наименование:'),
                 Select::make('cid')

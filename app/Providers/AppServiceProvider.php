@@ -33,9 +33,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->app->singleton(Patterns::class, fn() => Patterns::query()->get(['pattern', 'description'])
-            ->map(fn(Patterns $v) => ['key' => $v->pattern.' - '.$v->description, 'value' => substr($v->pattern, 1)])
-            ->toArray());
+        $this->app->singleton(Patterns::class, fn() => Patterns::query()->get(['pattern', 'description'])->map(fn(Patterns $v) => ['key' => $v->pattern.' - '.$v->description, 'value' => substr($v->pattern, 1)])->toArray());
 
         $this->app->singleton('json_decoder', fn() => new ExtJsonDecoder(true, 512, JSON_BIGINT_AS_STRING));
 
