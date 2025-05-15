@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
+use App\Filament\Tables\Actions\TokenBulkAction;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -34,6 +35,9 @@ class UserResource extends Resource
                     ->email()
                     ->required()
                     ->unique(ignoreRecord: true),
+                Forms\Components\TextInput::make('token')
+                    ->label('Token')
+                    ->disabled(),
                 Forms\Components\TextInput::make('password')
                     ->label('Пароль')
                     ->password()
@@ -55,6 +59,7 @@ class UserResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Имя')->searchable(),
                 Tables\Columns\TextColumn::make('email')->label('Email')->searchable(),
+                Tables\Columns\TextColumn::make('token')->placeholder('NULL')->label('API Token'),
                 Tables\Columns\TextColumn::make('roles.name')
                     ->label('Роли')
                     ->limit(3)
@@ -69,6 +74,9 @@ class UserResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make(),
+                TokenBulkAction::make('token')
+                    ->icon('heroicon-o-key')
+                    ->label('Gen API Token')
             ]);
     }
 

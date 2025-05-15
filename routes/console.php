@@ -17,7 +17,7 @@ Artisan::command('schedule:fetch-wb-orders', fn() => $this->call('fetch:wb-order
 ################ ЕГОР
 
 // Запуск чтения расписания операций
-Artisan::command('pending', fn() => $this->call('schedule:pending'))->everyMinute();
+//Artisan::command('pending', fn() => $this->call('schedule:pending'))->everyMinute();
 
 // Проверка на размер Логов - удалить если больше 100МБ
 Artisan::command('checking:logSize', fn() => $this->call('check:logSize'))->everyTenMinutes();

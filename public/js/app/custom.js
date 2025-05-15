@@ -1,6 +1,5 @@
 mention = container => values => ((tribute) => tribute.attach(container))(new Tribute({trigger: '{', menuContainer: container.parentNode, values}));
-
-for(let container of document.querySelectorAll(".js-zoomer .fi-fo-file-upload"))
+zoomer = container =>
 {
     container.onmousemove = event =>
     {
@@ -10,5 +9,4 @@ for(let container of document.querySelectorAll(".js-zoomer .fi-fo-file-upload"))
     };
 
     container.onmouseleave = event => event.currentTarget.removeAttribute('style');
-}
-
+};

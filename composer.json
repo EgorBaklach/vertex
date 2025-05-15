@@ -19,7 +19,8 @@
         "laravel/tinker": "^2.9",
         "reedware/laravel-composite-relations": "^4.0",
         "spatie/laravel-permission": "^6.10",
-      "ext-pdo": "*"
+        "ext-pdo": "*",
+        "ext-fileinfo": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

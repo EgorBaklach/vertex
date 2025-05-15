@@ -2,7 +2,6 @@
 
 use Filament\Forms\Components\FileUpload;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Storage;
 
 class ImageUpload extends FileUpload
 {
@@ -10,11 +9,13 @@ class ImageUpload extends FileUpload
 
     protected function setUp(): void
     {
-        parent::setUp(); $this->multiple(false)->previewable()->disabled()->image();
+        parent::setUp(); $this->multiple(false)->fetchFileInformation(false)->previewable()->disabled()->image();
+
+        $this->getUploadedFileUsing(fn($file): ?array => ['name' => basename($file), 'size' => 0, 'type' => null, 'url' => $file]);
     }
 
     public function getUrl(): string
     {
-        return Storage::disk('public')->url(Arr::first($this->getState()));
+        return Arr::first($this->getState());
     }
 }

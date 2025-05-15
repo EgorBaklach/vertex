@@ -1,1 +1,1 @@
-<div class="js-zoomer image-upload" style="--image-bg: url('{{url($getUrl())}}">@include('filament-forms::components.file-upload')</div>
+<div class="js-zoomer image-upload" style="--image-bg: url('{{$getUrl()}}')">@include('filament-forms::components.file-upload')</div>
