@@ -7,6 +7,8 @@ use App\Models\Dev\OZON\{Categories,
     Errors,
     FBOAmounts,
     FBOStocks,
+    FBSAmounts,
+    FBSStocks,
     Files,
     Indexes,
     PPV,
@@ -27,7 +29,7 @@ abstract class CTPAbstract extends ListRecords
         CT::class, CTP::class, Properties::class, Categories::class,
         Types::class, PV::class, Products::class, PPV::class, Files::class,
         Prices::class, Commissions::class, Errors::class, Indexes::class, Statuses::class,
-        FBOAmounts::class, FBOStocks::class
+        FBOAmounts::class, FBOStocks::class, FBSAmounts::class, FBSStocks::class
     ];
 
     protected function getHeaderActions(): array

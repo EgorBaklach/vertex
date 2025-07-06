@@ -32,6 +32,10 @@ trait Queries
         return ['active' => $total['Y'] ?? 0, 'unactive' => $total['D'] ?? 0, 'delete' => $total['NULL'] ?? 0];
     }
 
+    ///////////////////
+    /// SQL HELPERS ///
+    ///////////////////
+
     protected function keep(...$fields): array
     {
         return array_combine($fields, array_map(fn($v) => DB::raw('CASE WHEN VALUES(`'.$v.'`) IS NULL THEN `'.$v.'` ELSE VALUES(`'.$v.'`) END'), $fields));
@@ -41,6 +45,10 @@ trait Queries
     {
         return array_combine($fields, array_map(fn($v) => DB::raw('CASE WHEN `'.$v.'` IS NULL THEN VALUES(`'.$v.'`) ELSE `'.$v.'` END'), $fields));
     }
+
+    /////////////////////
+    /// FILE CHECKING ///
+    /////////////////////
 
     private function check(string $path): bool
     {

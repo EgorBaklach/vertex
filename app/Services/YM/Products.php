@@ -40,6 +40,32 @@ class Products extends MSAbstract
     /** @var string[]|bool[] */
     private array $cursors = [];
 
+    private array $fields = [
+        'sku_id' => false,
+        'last_request' => false,
+        'active' => true,
+        'archived' => true,
+        'tid' => false,
+        'cid' => false,
+        'modelId' => false,
+        'offerId' => false,
+        'modelName' => false,
+        'skuName' => false,
+        'name' => true,
+        'vendor' => true,
+        'vendorCode' => true,
+        'barcodes' => true,
+        'description' => true,
+        'manufacturerCountries' => true,
+        'weightDimensions' => true,
+        'tags' => true,
+        'boxCount' => true,
+        'cardStatus' => false,
+        'type' => true,
+        'downloadable' => true,
+        'adult' => true
+    ];
+
     private const classes = [
         ModelProducts::class => ['method' => 'update', 'foreign_key_check' => false],
         CommodityCodes::class => ['method' => 'update', 'foreign_key_check' => true],
@@ -59,12 +85,7 @@ class Products extends MSAbstract
 
     protected const limit = 10;
 
-    private const ttl = 600;
-
-    private function enqueue(string $operation, MarketplaceApiKey $token, string $page_token, ...$custom): void
-    {
-        $this->endpoint(Tokens::class, $operation, $token, http_build_query(['limit' => 200] + compact('page_token')), ...$custom);
-    }
+    private const ttl = 300;
 
     /**
      * Импорт товаров через равное кол-во пройденного времени, для сохрания ОЗУ
@@ -74,13 +95,13 @@ class Products extends MSAbstract
      */
     private function import(Connection $DB): void
     {
-        /** @var string|Model|CustomQueries $class */ if(count($this->results[Categories::class])) Categories::upsert($this->results[Categories::class], []);
+        /** @var Model $class */ if(count($this->results[Categories::class])) Categories::upsert($this->results[Categories::class], []);
 
         foreach(self::classes as $class => $value)
         {
             if(!$value['foreign_key_check']) $DB->statement('SET FOREIGN_KEY_CHECKS=0;');
 
-            foreach(array_chunk($this->results[$class] ?? [], 2000) as $chunk) $class::shortUpsert($chunk);
+            foreach(array_chunk($this->results[$class] ?? [], 2000) as $chunk) $class::query()->upsert($chunk, [], $class === ModelProducts::class ? $this->fields : null);
 
             if(!$value['foreign_key_check']) $DB->statement('SET FOREIGN_KEY_CHECKS=1;');
         }
@@ -92,37 +113,37 @@ class Products extends MSAbstract
     {
         ['paging' => $paging, 'offerMappings' => $products] = $result;
 
-        return function(array $post) use ($paging, $products, $token): string | false
+        return function(array $post) use ($paging, $products, $token): bool|string
         {
             foreach($products as $product)
             {
                 // PRODUCTS
 
-                $this->results[ModelProducts::class][$product['offer']['offerId']] = [
-                    'sku_id' => $product['mapping']['marketSku'] ?? null,
-                    'last_request' => date('Y-m-d H:i:s'),
-                    'active' => 'Y',
-                    'archived' => ($product['offer']['archived'] ?? $post['archived']) ? 'Y' : null,
-                    'tid' => $token->id,
-                    'cid' => $cid = $product['mapping']['marketCategoryId'],
-                    'modelId' => $product['mapping']['marketModelId'] ?? null,
-                    'offerId' => $product['offer']['offerId'],
-                    'modelName' => strlen($product['mapping']['marketModelName'] ?? '') ? $product['mapping']['marketModelName'] : null,
-                    'skuName' => strlen($product['mapping']['marketSkuName'] ?? '') ? $product['mapping']['marketSkuName'] : null,
-                    'name' => $product['offer']['name'],
-                    'vendor' => strlen($product['offer']['vendor'] ?? '') ? $product['offer']['vendor'] : null,
-                    'vendorCode' => strlen($product['offer']['vendorCode'] ?? '') ? $product['offer']['vendorCode'] : null,
-                    'barcodes' => count($barcodes = $product['offer']['barcodes'] ?? []) ? implode(',', $barcodes) : null,
-                    'description' => strlen($product['offer']['description'] ?? '') ? $product['offer']['description'] : null,
-                    'manufacturerCountries' => call_user_func(fn(...$countries) => count($countries) ? implode(',', $countries) : null, ...($product['offer']['manufacturerCountries'] ?? [])),
-                    'weightDimensions' => call_user_func(fn(...$dimensions) => count($dimensions) ? implode(',', $dimensions) : null, ...Arr::map(['length', 'width', 'height', 'weight'], fn($v) => $product['offer']['weightDimensions'][$v] ?? '')),
-                    'tags' => !array_key_exists('tags', $product['offer']) ? null : implode(',', $product['offer']['tags']),
-                    'boxCount' => $product['offer']['boxCount'] ?? null,
-                    'cardStatus' => $product['offer']['cardStatus'],
-                    'type' => $product['offer']['type'] ?? null,
-                    'downloadable' => ($product['offer']['downloadable'] ?? false) ? 'Y' : null,
-                    'adult' => ($product['offer']['adult'] ?? false) ? 'Y' : null,
-                ];
+                $this->results[ModelProducts::class][$product['offer']['offerId']] = array_combine(array_keys($this->fields), [
+                    $product['mapping']['marketSku'] ?? null,
+                    date('Y-m-d H:i:s'),
+                    'Y',
+                    ($product['offer']['archived'] ?? $post['archived']) ? 'Y' : null,
+                    $token->id,
+                    $cid = $product['mapping']['marketCategoryId'],
+                    $product['mapping']['marketModelId'] ?? null,
+                    $product['offer']['offerId'],
+                    strlen($product['mapping']['marketModelName'] ?? '') ? $product['mapping']['marketModelName'] : null,
+                    strlen($product['mapping']['marketSkuName'] ?? '') ? $product['mapping']['marketSkuName'] : null,
+                    $product['offer']['name'],
+                    strlen($product['offer']['vendor'] ?? '') ? $product['offer']['vendor'] : null,
+                    strlen($product['offer']['vendorCode'] ?? '') ? $product['offer']['vendorCode'] : null,
+                    count($barcodes = $product['offer']['barcodes'] ?? []) ? implode(',', $barcodes) : null,
+                    strlen($product['offer']['description'] ?? '') ? $product['offer']['description'] : null,
+                    call_user_func(fn(...$countries) => count($countries) ? implode(',', $countries) : null, ...($product['offer']['manufacturerCountries'] ?? [])),
+                    call_user_func(fn(...$dimensions) => count($dimensions) ? implode(',', $dimensions) : null, ...Arr::map(['length', 'width', 'height', 'weight'], fn($v) => $product['offer']['weightDimensions'][$v] ?? '')),
+                    !array_key_exists('tags', $product['offer']) ? null : implode(',', $product['offer']['tags']),
+                    $product['offer']['boxCount'] ?? null,
+                    $product['offer']['cardStatus'],
+                    $product['offer']['type'] ?? null,
+                    ($product['offer']['downloadable'] ?? false) ? 'Y' : null,
+                    ($product['offer']['adult'] ?? false) ? 'Y' : null,
+                ]);
 
                 // CATEGORIES
 
@@ -209,9 +230,9 @@ class Products extends MSAbstract
                     if(!array_key_exists($key = is_string($key) ? $key : $type.'Price', $product['offer'])) continue;
 
                     $pricies[] = $type.': '.Func::call($product['offer'][$key], fn(array $price) => match ($type)
-                    {
-                        'basic' => implode(' / ', Arr::map(['value', 'discountBase'], fn($k) => $price[$k] ?? 0)), default => $price['value']
-                    });
+                        {
+                            'basic' => implode(' / ', Arr::map(['value', 'discountBase'], fn($k) => $price[$k] ?? 0)), default => $price['value']
+                        });
 
                     $this->results[Prices::class][implode('_', [$product['offer']['offerId'], $type])] = [
                         'offer_id' => $product['offer']['offerId'],
@@ -225,7 +246,7 @@ class Products extends MSAbstract
                 if(count($pricies)) Storage::disk('local')->append('history/ym/'.$product['offer']['offerId'].'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...$pricies]));
             }
 
-            return $paging['nextPageToken'] ?? false;
+            return strlen($paging['nextPageToken'] ?? '') ? $this->encode($paging['nextPageToken']) : false;
         };
     }
 
@@ -233,37 +254,37 @@ class Products extends MSAbstract
     {
         ['paging' => $paging, 'offerCards' => $cards] = $result;
 
-        return function() use ($paging, $cards, $token): string | false
+        return function() use ($paging, $cards, $token): bool|string
         {
             foreach($cards as $card)
             {
                 // PRODUCTS IF NOT EXIST
 
-                $this->results[ModelProducts::class][$card['offerId']] ??= [
-                    'sku_id' => $card['mapping']['marketSku'] ?? null,
-                    'last_request' => date('Y-m-d H:i:s'),
-                    'active' => null,
-                    'archived' => null,
-                    'tid' => $token->id,
-                    'cid' => $card['mapping']['marketCategoryId'],
-                    'modelId' => $card['mapping']['marketModelId'] ?? null,
-                    'offerId' => $card['offerId'],
-                    'modelName' => strlen($card['mapping']['marketModelName'] ?? '') ? $card['mapping']['marketModelName'] : null,
-                    'skuName' => strlen($card['mapping']['marketSkuName'] ?? '') ? $card['mapping']['marketSkuName'] : null,
-                    'name' => null,
-                    'vendor' => null,
-                    'vendorCode' => null,
-                    'barcodes' => null,
-                    'description' => null,
-                    'manufacturerCountries' => null,
-                    'weightDimensions' => null,
-                    'tags' => null,
-                    'boxCount' => null,
-                    'cardStatus' => $card['cardStatus'],
-                    'type' => null,
-                    'downloadable' => null,
-                    'adult' => null,
-                ];
+                $this->results[ModelProducts::class][$card['offerId']] ??= array_combine(array_keys($this->fields), [
+                    $card['mapping']['marketSku'] ?? null,
+                    date('Y-m-d H:i:s'),
+                    null,
+                    null,
+                    $token->id,
+                    $card['mapping']['marketCategoryId'],
+                    $card['mapping']['marketModelId'] ?? null,
+                    $card['offerId'],
+                    strlen($card['mapping']['marketModelName'] ?? '') ? $card['mapping']['marketModelName'] : null,
+                    strlen($card['mapping']['marketSkuName'] ?? '') ? $card['mapping']['marketSkuName'] : null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    $card['cardStatus'],
+                    null,
+                    null,
+                    null,
+                ]);
 
                 // PROPERTIES
 
@@ -309,13 +330,20 @@ class Products extends MSAbstract
                 }
             }
 
-            return $paging['nextPageToken'] ?? false;
+            return strlen($paging['nextPageToken'] ?? '') ? $this->encode($paging['nextPageToken']) : false;
         };
+    }
+
+    private function encode(string $page_token = ''): string
+    {
+        return http_build_query(['limit' => 200] + compact('page_token'));
     }
 
     public function __invoke(): void
     {
         /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+
+        $this->fields = Arr::map($this->fields, fn($v, $k) => DB::raw($v ? 'CASE WHEN `active`=\'Y\' THEN `'.$k.'` ELSE VALUES(`'.$k.'`) END' : 'VALUES(`'.$k.'`)'));
 
         $manager->source->ttl = [
             'connectTimeout' => 60,
@@ -338,21 +366,21 @@ class Products extends MSAbstract
             {
                 foreach([0, 1] as $archived)
                 {
-                    if(($page_token = $this->cursors[$token->id]['mappings'][$archived] ?? '') !== false)
+                    if($query = $this->cursors[$token->id]['mappings'][$archived] ?? $this->encode())
                     {
-                        $this->enqueue('mappings', $token, $page_token, fn(bool|string $page_token = false) => $this->cursors[$token->id]['mappings'][$archived] = $page_token, !!$archived);
+                        $this->endpoint(Tokens::class, 'mappings', $token, $query, fn(bool|string $query) => $this->cursors[$token->id]['mappings'][$archived] = $query, !!$archived);
                     }
                 }
 
-                if(($page_token = $this->cursors[$token->id]['cards'] ?? '') !== false)
+                if($query = $this->cursors[$token->id]['cards'] ?? $this->encode())
                 {
-                    $this->enqueue('cards', $token, $page_token, fn(bool|string $page_token = false) => $this->cursors[$token->id]['cards'] = $page_token);
+                    $this->endpoint(Tokens::class, 'cards', $token, $query, fn(bool|string $query) => $this->cursors[$token->id]['cards'] = $query);
                 }
             }
 
             if(!$manager->count()) break;
 
-            $manager->init(function(Response $response, $attributes, $operation, $injector)
+            $manager->init(function(Response $response, array $attributes, string $operation, callable $injector)
             {
                 try
                 {
@@ -362,7 +390,7 @@ class Products extends MSAbstract
                 {
                     Log::channel('error')->error(implode(' | ', ['YM Products', $response->status(), $response->body(), (string) $e]));
 
-                    throw ($this->isAccess($attributes['token']) || $injector()) ? $e : new ErrorException($response);
+                    throw ($this->isAccess($attributes['token']) || $injector(false)) ? $e : new ErrorException($response);
                 }
             });
 

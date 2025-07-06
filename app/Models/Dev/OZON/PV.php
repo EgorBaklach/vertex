@@ -46,6 +46,6 @@ class PV extends Model
 
     public function property(): BelongsTo
     {
-        return $this->belongsTo(Properties::class, 'pid', 'id');
+        return $this->belongsTo(Properties::class, 'did', 'did');
     }
 }

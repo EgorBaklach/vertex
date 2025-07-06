@@ -67,6 +67,11 @@ class Stocks extends MSAbstract
         /** @var string|Model|CustomQueries $class */ foreach($this->results as $class => $values) foreach(array_chunk($values, 2000) as $chunk) $class::shortUpsert($chunk); $this->results = [];
     }
 
+    private function encode(string $page_token = ''): string
+    {
+        return http_build_query(['limit' => 200] + compact('page_token'));
+    }
+
     public function __invoke(): void
     {
         /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
@@ -125,9 +130,9 @@ class Stocks extends MSAbstract
             {
                 foreach([0, 1] as $archived)
                 {
-                    if(($page_token = $this->cursors[$token->id][$archived] ?? '') !== false)
+                    if($query = $this->cursors[$token->id][$archived] ?? $this->encode())
                     {
-                        $this->endpoint(Tokens::class, 'amounts', $token, http_build_query(['limit' => 200] + compact('page_token')), !!$archived);
+                        $this->endpoint(Tokens::class, 'amounts', $token, $query, !!$archived);
                     }
                 }
             }
@@ -168,7 +173,7 @@ class Stocks extends MSAbstract
                         }
                     }
 
-                    $this->cursors[$token->id][$archived] = $paging['nextPageToken'] ?? false;
+                    $this->cursors[$token->id][$archived] = strlen($paging['nextPageToken'] ?? '') ? $this->encode($paging['nextPageToken']) : false;
                 }
                 catch (Throwable $e)
                 {
@@ -183,7 +188,7 @@ class Stocks extends MSAbstract
 
         $this->import(); $DB->statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        $this->operation->update(['next_start' => $this->operation->next_start > strtotime('today 12:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
+        $this->operation->update(['next_start' => $this->operation->next_start > strtotime('today 14:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
 
         Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)])); foreach(self::classes as $class => $method) $this->log(new ReflectionClass($class), $method);
     }

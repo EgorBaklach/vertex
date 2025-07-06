@@ -166,9 +166,8 @@ class FBSStocks extends MSAbstract
         Log::channel('wb')->info(implode(' | ', ['WB FBSAmounts', array_sum(array_column($this->results, 'total')), Time::during(time() - $start)]));
 
         Schedule::shortUpsert([
-            ['market' => 'WB', 'operation' => 'PRICES', 'next_start' => $this->operation->next_start > strtotime('today 12:00') ? null : time(), 'counter' => 0],
-            ['market' => 'WB', 'operation' => 'WB_PRICES', 'next_start' => $this->operation->next_start > strtotime('today 12:00') ? time() : null, 'counter' => 0],
-            ['market' => 'WB', 'operation' => 'FBS_STOCKS', 'next_start' => null, 'counter' => 0]
+            ['market' => 'WB', 'operation' => 'FBS_STOCKS', 'next_start' => null, 'counter' => 0],
+            ['market' => 'WB', 'operation' => 'PRICES', 'next_start' => time(), 'counter' => 0]
         ]);
     }
 }

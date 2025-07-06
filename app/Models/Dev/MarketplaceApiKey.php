@@ -79,7 +79,7 @@ class MarketplaceApiKey extends Model
         return Attribute::make(
             get: fn () => match($this->marketplace)
             {
-                'OZON' => ['withHeaders' => [$this->params + ['Api-Key' => $this->token]]], default => ['withToken' => $this->token]
+                'WB' => ['withToken' => $this->token], default => ['withHeaders' => [$this->params + ['Api-Key' => $this->token]]]
             }
         );
     }

@@ -183,7 +183,7 @@ class ProductsResource extends Resource
                     ->wrap()
                     ->label('Цена, Остатки, Габариты, Код'),
                 TextColumn::make('chars')->verticalAlignment(VerticalAlignment::Start)
-                    ->getStateUsing(fn(Products $product) => Func::call(App::get(YMCProperties::class)($product), fn(?string $html) => strlen($html) ? new HtmlString($html) : null))
+                    ->getStateUsing(fn(Products $product) => Func::call(App::make(YMCProperties::class)($product), fn(?string $html) => strlen($html) ? new HtmlString($html) : null))
                     ->size(TextColumn\TextColumnSize::ExtraSmall)
                     ->placeholder('NULL')
                     ->markdown()

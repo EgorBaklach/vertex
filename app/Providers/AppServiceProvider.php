@@ -11,6 +11,9 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Get;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Interfaces\ImageManagerInterface;
 use JsonMachine\JsonDecoder\ExtJsonDecoder;
 use App\Services\{APIManager, Sources\Proxies, Sources\SourceInterface, Sources\Tokens, OZON, YM, WB};
 use Illuminate\Contracts\Foundation\Application;
@@ -36,7 +39,9 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton('json_decoder', fn() => new ExtJsonDecoder(true, 512, JSON_BIGINT_AS_STRING));
 
-        $this->app->singleton('markets', fn() => [
+        $this->app->singleton(ImageManagerInterface::class, fn() => new ImageManager(new Driver));
+
+        $this->app->singleton('categories', fn() => [
             'wb' => [
                 'query' => fn(Builder $query): Builder => $query->has('parent')->where('childs', 0),
                 'option' => fn(WBCategories $category) => $category->parent->name.' - '.$category->name,

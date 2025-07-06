@@ -9,6 +9,6 @@ trait Repeater
 
     protected function isAccess(MarketplaceApiKey $token): bool
     {
-        $this->repeats[$token->id] ??= 0; return ++$this->repeats[$token->id] <= static::limit;
+        $this->repeats[$token->id] ??= 0; return ++$this->repeats[$token->id] <= static::limit ?? 10;
     }
 }

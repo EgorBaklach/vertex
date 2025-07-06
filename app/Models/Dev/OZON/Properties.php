@@ -30,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read int|null $types_count
  * @property-read Collection<int, CTP> $ctps
  * @property-read int|null $ctps_count
+ * @property-read Collection<int, PV> $pvs
+ * @property-read int|null $pvs_count
  * @method static Builder<static>|Properties newModelQuery()
  * @method static Builder<static>|Properties newQuery()
  * @method static Builder<static>|Properties query()
@@ -88,5 +90,10 @@ class Properties extends Model
     public function ctps(): HasMany
     {
         return $this->hasMany(CTP::class, 'pid', 'id');
+    }
+
+    public function pvs(): HasMany
+    {
+        return $this->hasMany(PV::class, 'did', 'did');
     }
 }

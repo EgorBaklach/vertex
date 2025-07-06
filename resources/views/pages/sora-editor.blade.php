@@ -2,7 +2,11 @@
     <x-filament::section>
         @if($this->data)
             <x-filament-panels::form
-                @keydown.window="![2, null].includes($wire.data.status) && ['1','2','3','4','s',' ','x'].includes($event.key) && $wire.toggle($event.key) && $event.preventDefault()"
+                @keydown.window="
+                !$wire.data.selectGen && $wire.data.abort !== 'Y' && ![$wire.last_position, null].includes($wire.data.position) &&
+                ['1','2','3','4','b','s',' ','x'].includes($event.key) &&
+                $wire.toggle($event.key) &&
+                $event.preventDefault()"
                 x-init="document.querySelectorAll('.js-zoomer .fi-fo-file-upload').forEach(zoomer)"
                 wire:key="{{ $this->data['number'] }}"
                 wire:submit="save">

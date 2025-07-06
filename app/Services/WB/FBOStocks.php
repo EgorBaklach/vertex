@@ -57,7 +57,7 @@ class FBOStocks extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time();
+        $start = time(); Storage::disk('local')->deleteDirectory('reports');
 
         ///////////////////
         /// GET REPORTS ///
@@ -79,7 +79,7 @@ class FBOStocks extends MSAbstract
                 if(!$node = $response->json('data')) throw new ErrorException($response); $this->results[$attributes['token']->id] = $node;
             });
 
-            usleep(1000000);
+            usleep(1500000);
         }
 
         if($this->remains()) return;
@@ -101,9 +101,7 @@ class FBOStocks extends MSAbstract
         {
             foreach(Items::fromFile(storage_path('app/private/reports/'.$token->id.'.json'), ['decoder' => APP::make('json_decoder')]) as $sku)
             {
-                $stocks = [
-                    date('Y-m-d H:i:s')
-                ];
+                if(!strlen($sku['barcode'] ?? false)) continue; $stocks = [date('Y-m-d H:i:s')];
 
                 foreach($sku['warehouses'] as $stock)
                 {
@@ -140,7 +138,7 @@ class FBOStocks extends MSAbstract
             if(count($this->results)) $this->iterate();
         }
 
-        $DB->statement('SET FOREIGN_KEY_CHECKS=1;'); Storage::disk('local')->deleteDirectory('reports');
+        $DB->statement('SET FOREIGN_KEY_CHECKS=1;');
 
         Log::channel('wb')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB FBO Stocks', ...Arr::map($this->counts(ModelFBOStocks::class), fn($v, $k) => $k.': '.$v)]));

@@ -14,6 +14,20 @@ class Schedule extends Command
     protected $signature = 'schedule:pending {market?} {operation?}';
     protected $description = self::class;
 
+    private function pending(): void
+    {
+        /** @var ModelSchedule $task */ $dispatcher = [];
+
+        foreach(ModelSchedule::query()->where('active', 'Y')->where('next_start', '<=', time())->get(['market', 'operation', 'ttl']) as $task)
+        {
+            if(Cache::get($task->name) === 'Y') continue; Cache::set($task->name, 'Y', $task->ttl);
+
+            call_user_func([$dispatcher[$task->name] = new Process(['php', 'artisan', 'schedule:pending', $task->market, $task->operation]), 'start']);
+        }
+
+        if(count($dispatcher)) while(true): sleep(1); foreach($dispatcher as $process) if($process->isRunning()) continue 2; break; endwhile;
+    }
+
     private function dispatch(string $market, string $operation): void
     {
         /** @global ModelSchedule $task */
@@ -34,20 +48,6 @@ class Schedule extends Command
         }
 
         Cache::delete($market.'_'.$operation);
-    }
-
-    private function pending(): void
-    {
-        /** @var ModelSchedule $task */ $dispatcher = [];
-
-        foreach(ModelSchedule::query()->where('active', 'Y')->where('next_start', '<=', time())->get(['market', 'operation', 'ttl']) as $task)
-        {
-            if(Cache::get($task->name) === 'Y') continue; Cache::set($task->name, 'Y', $task->ttl);
-
-            call_user_func([$dispatcher[$task->name] = new Process(['php', 'artisan', 'schedule:pending', $task->market, $task->operation]), 'start']);
-        }
-
-        if(count($dispatcher)) while(true): sleep(1); foreach($dispatcher as $process) if($process->isRunning()) continue 2; break; endwhile;
     }
 
     public function handle(): int

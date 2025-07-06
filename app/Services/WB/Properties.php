@@ -24,9 +24,6 @@ class Properties extends MSAbstract
 
     private array $ids = [];
 
-    /** @var int[] */
-    private array $skip = [];
-
     private const additionals = [
         'colors' => 'Цвет',
         'kinds' => 'Пол',
@@ -75,19 +72,17 @@ class Properties extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $last_id = Cache::get($this->hash) ?? 0;
+        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $last_id = 0;
 
         $manager->source->handlers['next'] = fn(string $market) => Func::call($manager->source, fn(Tokens $source) => $source->next($market) ?: $source->reset($market, 500000)->current($market));
 
         if($this->operation->counter === 1) $this->updateInstances(PV::query()->whereIn('pid', Settings::whereLike('variable', '%pid')->pluck('value')->all() ?? []));
 
-        $tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first() * 1 ?: 15000001);
+        $tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => (Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first() * 1) ?: 15000001);
 
         while(true)
         {
-            $cids = Categories::query()->where('id', '>', $last_id)->orderBy('id')->limit(5)->pluck('id');
-
-            if(!$cids->count()): $last_id = 0; break; endif; foreach($cids as $id) $this->endpoint(Tokens::class, $id); if(!$manager->count()) break;
+            foreach(Categories::query()->where('id', '>', $last_id)->orderBy('id')->limit(5)->pluck('id') as $id) $this->endpoint(Tokens::class, $id); if(!$manager->count()) break;
 
             $manager->init(function(Response $response, $attributes, string $operation, int $cid)
             {
@@ -110,11 +105,6 @@ class Properties extends MSAbstract
             ksort($this->ids); foreach($this->ids as $id => $operations) if(!count(array_diff(['properties', 'tnved'], $operations))) $last_id = $id * 1; $this->ids = $this->results = $this->tnveds = [];
         }
 
-        if($last_id)
-        {
-            Cache::set($this->hash, $last_id, 600); Log::channel('wb')->info(implode(' | ', ['WB Properties Iteration', $this->operation->counter, Time::during(time() - $start)])); return;
-        }
-
         Log::channel('wb')->info(implode(' | ', ['RESULT', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB Properties', ...Arr::map($this->counts(ModelProperties::class), fn($v, $k) => $k.': '.$v)]));
 
@@ -122,7 +112,5 @@ class Properties extends MSAbstract
             ['market' => 'WB', 'operation' => 'PROPERTIES', 'next_start' => null, 'counter' => 0],
             ['market' => 'WB', 'operation' => 'DIRECTORIES', 'next_start' => time(), 'counter' => 0]
         ]);
-
-        Cache::delete($this->hash);
     }
 }

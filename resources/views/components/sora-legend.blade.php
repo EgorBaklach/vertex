@@ -1,0 +1,1 @@
+@foreach($legend as [$f, $s])<div>@if($s) <b>`{{$f}}`</b> - {{$s}} @else {{$f}} @endif</div>@endforeach
