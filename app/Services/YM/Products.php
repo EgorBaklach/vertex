@@ -95,7 +95,7 @@ class Products extends MSAbstract
      */
     private function import(Connection $DB): void
     {
-        /** @var Model $class */ if(count($this->results[Categories::class])) Categories::upsert($this->results[Categories::class], []);
+        /** @var Model $class */ if(count($this->results[Categories::class] ?? [])) Categories::upsert($this->results[Categories::class], []);
 
         foreach(self::classes as $class => $value)
         {

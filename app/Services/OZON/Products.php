@@ -139,16 +139,21 @@ class Products extends TokensAbstract
                     {
                         $value['value'] = preg_replace('/[\n\r]+/', '', $value['value']);
 
-                        if($value['dictionary_value_id']) $this->results[PV::class][$value['dictionary_value_id']] ??= [
-                            'id' => $value['dictionary_value_id'],
-                            'did' => $this->properties['dids'][$pid],
-                            'last_request' => date('Y-m-d H:i:s'),
-                            'active' => 'Y',
-                            'value' => $value['value'],
-                            'info' => null,
-                            'picture' => null,
-                            'custom' => !array_key_exists($property['id'], $this->properties['dids']) ? 'Y' : null
-                        ];
+                        if($value['dictionary_value_id'])
+                        {
+                            if(!array_key_exists($pid, $this->properties['dids'])) continue 2;
+
+                            $this->results[PV::class][$value['dictionary_value_id']] ??= [
+                                'id' => $value['dictionary_value_id'],
+                                'did' => $this->properties['dids'][$pid],
+                                'last_request' => date('Y-m-d H:i:s'),
+                                'active' => 'Y',
+                                'value' => $value['value'],
+                                'info' => null,
+                                'picture' => null,
+                                'custom' => !array_key_exists($property['id'], $this->properties['dids']) ? 'Y' : null
+                            ];
+                        }
 
                         $this->results[PPV::class][implode(' | ', [$product['id'], $pid, $value['dictionary_value_id'] ?: $value['value']])] = [
                             'product_id' => $product['id'],

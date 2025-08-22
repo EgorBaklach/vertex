@@ -77,9 +77,11 @@ class AppServiceProvider extends ServiceProvider
                     'parent' => fn() => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/parent/all', 'WB'),
                     'children' => fn(int $cid) => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/all?'.http_build_query(['parentID' => $cid, 'limit' => 1000]), 'WB', 'get', null, $cid)
                 ],
-                WB\Properties::class => fn(int $cid) => $manager
-                    ->enqueue('https://content-api.wildberries.ru/content/v2/object/charcs/'.$cid, 'WB', 'get', null, 'properties', $cid)
-                    ->enqueue('https://content-api.wildberries.ru/content/v2/directory/tnved?subjectID='.$cid, 'WB', 'get', null, 'tnved', $cid),
+                WB\Properties::class => fn(string $operation, int $cid) => match($operation)
+                {
+                    'properties' => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/charcs/'.$cid, 'WB', 'get', null, 'properties', $cid),
+                    'tnved' => $manager->enqueue('https://content-api.wildberries.ru/content/v2/directory/tnved?subjectID='.$cid, 'WB', 'get', null, 'tnved', $cid)
+                },
                 WB\Directories::class => fn(string $operation, int $pid) => $manager->enqueue('https://content-api.wildberries.ru/content/v2/directory/'.$operation.'?locale=ru', 'WB', 'get', null, $operation, $pid),
                 WB\Products::class => [
                     ['card', 'https://content-api.wildberries.ru/content/v2/get/cards/list', ['settings' => ['cursor' => [], 'filter' => ['withPhoto' => -1]]]],
@@ -175,7 +177,7 @@ class AppServiceProvider extends ServiceProvider
             ]),
             Proxies::class => fn() => Func::call($app->make(Proxies::class), fn(APIManager $manager) => [
                 APIManager::class => $manager,
-                WB\WBPrices::class => fn(string $ids, int $key) => $manager->enqueue('https://card.wb.ru/cards/v3/detail?dest=-1275608&nm='.$ids, null, 'get', null, (string) Str::uuid(), $key)
+                WB\WBPrices::class => fn(string $ids, int $key) => $manager->enqueue('https://card.wb.ru/cards/v4/detail?dest=-1275608&nm='.$ids, null, 'get', null, (string) Str::uuid(), $key)
             ])
         ]);
     }

@@ -99,7 +99,7 @@ class WBPrices extends MSAbstract
     {
         $manager->init(function(Response $response, $attributes, $uuid, $key)
         {
-            if($this->skip || !is_array($products = $response->json('data.products'))) throw new ErrorException($response); unset($this->chunks[$key]);
+            if($this->skip || !is_array($products = $response->json('products'))) throw new ErrorException($response); unset($this->chunks[$key]);
 
             foreach($products as $product)
             {
