@@ -43,7 +43,7 @@ class APIManager
                         {
                             foreach(['Before' => $pool, 'After' => $pool = $pool->{$method}(...(array) $params)] as $state => $node)
                             {
-                                $params = call_user_func($this->source->{$method.$state}, $node, ...(array) $params) ?? $params;
+                                $params = call_user_func($this->source->handlers[$method.$state] ?? fn() => null, $node, ...(array) $params) ?? $params;
                             }
                         }
                     });

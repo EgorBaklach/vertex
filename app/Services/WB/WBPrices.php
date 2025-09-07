@@ -2,7 +2,6 @@
 
 use App\Exceptions\Http\ErrorException;
 use App\Exceptions\Http\HttpAbstract;
-use App\Helpers\Func;
 use App\Helpers\Time;
 use App\Models\Dev\WB\Prices as ModelPrices;
 use App\Models\Dev\WB\Sizes;
@@ -50,11 +49,14 @@ class WBPrices extends MSAbstract
 
         $this->chunks = Cache::remember($this->hash, 600, function()
         {
-            $query = ModelPrices::query()->whereHas('product', fn(Builder $builder) => $builder->where('active', 'Y'))->where(function(Builder $query)
-            {
-                foreach(['sizes.fbs_amounts' => 'whereHas', 'sizes.fbo_amounts' => 'orWhereHas'] as $relation => $method)
-                    $query = $query->{$method}($relation, fn(Builder $builder) => $builder->where('amount', '>', 0));
-            });
+            $query = ModelPrices::query()
+                ->whereHas('token', fn(Builder $b) => $b->whereJsonContains('days', date('N') * 1))
+                ->whereHas('product', fn(Builder $builder) => $builder->where('active', 'Y'))
+                ->where(function(Builder $query)
+                {
+                    foreach(['sizes.fbs_amounts' => 'whereHas', 'sizes.fbo_amounts' => 'orWhereHas'] as $relation => $method)
+                        $query = $query->{$method}($relation, fn(Builder $builder) => $builder->where('amount', '>', 0));
+                });
 
             $rows = []; $last_id = 0;
 
@@ -103,7 +105,7 @@ class WBPrices extends MSAbstract
 
             foreach($products as $product)
             {
-                if(!count($product['sizes'] ?? [])) Log::channel('error')->error(['WBPrices | Empty Sizes', json_encode($product)]);
+                //if(!count($product['sizes'] ?? [])) Log::channel('error')->error(['WBPrices | Empty Sizes', json_encode($product)]);
 
                 foreach ($product['sizes'] ?? [] as $size) if($price = Arr::get($size, 'price.product')) $this->results[$size['optionId']] = [
                     'sizeID' => $size['optionId'],

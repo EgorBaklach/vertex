@@ -35,8 +35,6 @@ class Stocks extends MSAbstract
 
     protected const limit = 10;
 
-    private const ttl = 600;
-
     public function __get(string $name): callable
     {
         return fn(array $value): array|callable => match($name)
@@ -183,7 +181,7 @@ class Stocks extends MSAbstract
                 }
             });
 
-            if($this->due($start)) $this->import();
+            if($this->due(600 * 1000)) $this->import();
         }
 
         $this->import(); $DB->statement('SET FOREIGN_KEY_CHECKS=1;');

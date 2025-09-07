@@ -177,7 +177,7 @@ class Products extends TokensAbstract
 
     public function __invoke(): void
     {
-        /** @var Model $class */ $this->start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
+        /** @var Model $class */ $this->start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class);
 
         if($this->operation->counter === 1)
         {
@@ -204,7 +204,7 @@ class Products extends TokensAbstract
                 {
                     foreach($manager->source->all('OZON') as $tid => $token)
                     {
-                        if(($post['last_id'] = $this->cursors[$visibility][$tid] ?? '') === false) continue; $post['filter'] = compact('visibility');
+                        if(!in_array($day, $token->days) || ($post['last_id'] = $this->cursors[$visibility][$tid] ?? '') === false) continue; $post['filter'] = compact('visibility');
 
                         $manager->enqueue($endpoint, $token, 'post', $post, $visibility, $operator);
                     }

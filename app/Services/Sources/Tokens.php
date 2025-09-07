@@ -15,7 +15,7 @@ class Tokens extends SourceAbstract
 
     public function __construct(MarketplaceApiKey $model)
     {
-        foreach($model->where('active', 'Y')->orderBy('last_request')->get(['id', 'marketplace', 'token', 'params']) as $token) $this->tokens[$token->marketplace][$token->id] = $token;
+        foreach($model->where('active', 'Y')->orderBy('last_request')->get(['id', 'marketplace', 'token', 'params', 'days']) as $token) $this->tokens[$token->marketplace][$token->id] = $token;
 
         $this->skip = fn(array $attributes) => $attributes['token']->id; foreach(['success', 'abort'] as $state) $this->{$state} = fn(HttpAbstract $e) => $e->token->inset($state);
 
@@ -58,9 +58,9 @@ class Tokens extends SourceAbstract
     }
 
     /** @return MarketplaceApiKey|bool|null */
-    public function token(string $market, mixed $node = 'current'): mixed
+    public function token(string $market, mixed $position = 'current'): mixed
     {
-        return Arr::get($this->tokens, $market, $node) ?? call_user_func($this->{$node}, $market);
+        return Arr::get($this->tokens, $market, $position) ?? call_user_func($this->handlers[$position], $market);
     }
 
     public function enqueue(string $endpoint, $data = null, string $method = 'get', mixed $post = null, ...$custom): void
@@ -74,6 +74,6 @@ class Tokens extends SourceAbstract
 
     public function start(): void
     {
-        $this->throws = 0;
+        call_user_func($this->handlers['start'] ?? fn() => null); $this->throws = 0;
     }
 }

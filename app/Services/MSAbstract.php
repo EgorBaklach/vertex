@@ -22,7 +22,7 @@ abstract class MSAbstract
         return new static(...$values);
     }
 
-    protected function endpoint(string $source, $node = null, ...$attributes): null|array|APIManager
+    protected function endpoint(string $source, $node = null, ...$attributes): bool|null|array|APIManager
     {
         foreach([[$node], [static::class, $node], [static::class]] as $params) if(!is_null($resolve = Arr::get($this->endpoints, $source, ...$params, ...$attributes))) return $resolve; return null;
     }

@@ -3,6 +3,7 @@
 use App\Filament\Clusters\Dev;
 use App\Helpers\Func;
 use App\Models\Dev\MarketplaceApiKey;
+use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
@@ -13,7 +14,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
-use Illuminate\Support\HtmlString;
 
 class MarketplaceApiKeyResource extends Resource
 {
@@ -52,7 +52,20 @@ class MarketplaceApiKeyResource extends Resource
             Select::make('active')->options(['Y' => 'Y'])->placeholder('N')->reactive()->label('Вкл'),
             Select::make('marketplace')->options(['OZON' => 'OZON', 'WB' => 'Wildberries', 'YM' => 'Яндекс маркет'])->reactive()->required()->label('Маркетплейс'),
             TextInput::make('name')->required()->label('Наименование'),
-            TextInput::make('token')->required()->label('Api-Key')
+            TextInput::make('token')->required()->label('Api-Key'),
+            Select::make('days')
+                ->label('Дни импорта данных')
+                ->options([
+                    1 => 'Понедельник',
+                    2 => 'Вторник',
+                    3 => 'Среда',
+                    4 => 'Четверг',
+                    5 => 'Пятница',
+                    6 => 'Суббота',
+                    7 => 'Воскресенье',
+                ])
+                ->multiple()
+                ->required(),
         ]);
     }
 
@@ -76,17 +89,18 @@ class MarketplaceApiKeyResource extends Resource
                 TextColumn::make('info')
                     ->getStateUsing(fn(MarketplaceApiKey $token) => match($token->marketplace)
                     {
-                        'WB' => new HtmlString(Func::call(self::read_wb_token($token->token), fn(array $data) => Func::call($data['second'], fn(array $second) => implode('<br>', [
+                        'WB' => Func::call(self::read_wb_token($token->token), fn(array $data) => Func::call($data['second'], fn(array $second) => implode('<br>', [
                             '**ID**: '.$second['id'],
                             '**SID**: '.$second['sid'],
                             '**Expired**: '.date('Y-m-d H:i:s', $second['exp'])
-                        ])))),
-                        default => is_null($token->params) ? null : new HtmlString(self::decode($token->params))
+                        ]))),
+                        default => is_null($token->params) ? null : self::decode($token->params)
                     })
                     ->size(TextColumn\TextColumnSize::ExtraSmall)
                     ->placeholder('NULL')
                     ->markdown()
                     ->label('Параметры'),
+                TextColumn::make('days_string')->label('Дни импорта данных'),
                 TextColumn::make('process')->label('В работе'),
                 TextColumn::make('success')->label('Успешно'),
                 TextColumn::make('abort')->label('Отказ'),

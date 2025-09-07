@@ -1,11 +1,13 @@
 <?php namespace App\Services\Traits;
 
+use Illuminate\Support\Facades\App;
+
 trait Tracker
 {
     private int $tick = 1;
 
-    public function due(int $timestamp): bool
+    public function due(int $ttl): bool
     {
-        return time() > $timestamp + self::ttl * $this->tick && !!++$this->tick;
+        return floor(microtime(true) * 1000) > App::make('timestamp') + $ttl * $this->tick && !!++$this->tick;
     }
 }

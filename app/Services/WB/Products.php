@@ -8,9 +8,9 @@ use App\Models\Dev\Schedule;
 use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
-use App\Services\Traits\Queries;
-use App\Services\Traits\Repeater;
+use App\Services\Traits\{Queries, Repeater, Tracker};
 use ErrorException as NativeErrorException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +22,7 @@ use Throwable;
 
 class Products extends MSAbstract
 {
-    use Queries, Repeater;
+    use Queries, Repeater, Tracker;
 
     private array $cursors = [];
 
@@ -30,7 +30,7 @@ class Products extends MSAbstract
 
     private array $vids = [];
 
-    protected const limit = 500;
+    protected const limit = 1000;
 
     private function remains(string $state): int
     {
@@ -39,25 +39,30 @@ class Products extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+        /** @var string|Model $class */
+
+        $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
         $tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first() * 1 ?: 15000001);
         $zero_properties = Cache::remember('wb_zero_properties', 3600, fn() => array_fill_keys(Properties::query()->whereLike('count', 0)->pluck('id')->all(), true));
 
         if($this->operation->counter === 1)
         {
-            Categories::query()->update(['cnt' => 0]); foreach([ModelProducts::class, Sizes::class] as $class) /** @var Model $class */ $this->updateInstances($class::query());
-
-            $this->updateInstances(PV::query()->whereNotIn('pid', Settings::query()->whereLike('variable', '%pid')->pluck('value')->all() ?? []));
+            foreach ([ModelProducts::class, Sizes::class] as $class) $this->updateInstances($class::query()->whereHas('token', fn(Builder $b) => $b->whereJsonContains('days', $day))); Categories::query()->update(['cnt' => 0]);
         }
 
         foreach($this->cursors = Cache::get($this->hash) ?? [] as $operator => $cursors) foreach ($cursors as $tid => $cursor) if($cursor === false) $this->skip[$operator][$tid] = true;
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
+        {
+            $manager->source->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
 
         $DB->statement('SET FOREIGN_KEY_CHECKS=0;');
 
         while(true)
         {
-            $stamp = floor(microtime(true) * 1000); $this->results = [];
+            $this->results = [];
 
             foreach($this->endpoint(Tokens::class) as [$operator, $endpoint, $post])
             {
@@ -68,7 +73,7 @@ class Products extends MSAbstract
 
                 foreach($manager->source->all('WB') as $tid => $token)
                 {
-                    if($this->skip[$operator][$tid] ?? false) continue; $post['settings']['cursor'] = compact('limit') + ($this->cursors[$operator][$tid] ?? []);
+                    if(!in_array($day, $token->days) || ($this->skip[$operator][$tid] ?? false)) continue; $post['settings']['cursor'] = compact('limit') + ($this->cursors[$operator][$tid] ?? []);
 
                     $manager->enqueue($endpoint, $token, 'post', $post, $operator, $tid);
                 }
@@ -183,17 +188,15 @@ class Products extends MSAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(implode(' | ', ['WB '.$this->operation->operation,  $response->status(), $response->body()]));
+                    if($response->status() !== 429) Log::channel('error')->error(implode(' | ', ['WB Products',  $response->status(), $response->body()]));
 
                     usleep(100); throw $this->isAccess($attributes['token']) ? $e : new ErrorException($response);
                 }
             });
 
-            /** @var string|Model $class */
-
             foreach([Properties::class, ModelProducts::class, PV::class, PPV::class, Files::class, Sizes::class, Categories::class] as $class) if(count($values = $this->results[$class] ?? [])) match($class)
             {
-                ModelProducts::class => $class::upsert($values, [], array_merge($this->keep('title', 'description', 'brand'), $this->replace('imtID', 'nmUUID', 'updatedAt', 'dimensions'), ['last_request', 'active', 'inTrash', 'cid'])),
+                ModelProducts::class => $class::query()->upsert($values, [], array_merge($this->keep('title', 'description', 'brand'), $this->replace('imtID', 'nmUUID', 'updatedAt', 'dimensions'), ['last_request', 'active', 'inTrash', 'cid'])),
 
                 PV::class => call_user_func(function() use ($values)
                 {
@@ -206,7 +209,7 @@ class Products extends MSAbstract
                 default => $class::query()->upsert($values, [])
             };
 
-            if(floor(microtime(true) * 1000) - $stamp <= 500) usleep(1000000);
+            if($this->due(500)) usleep(1000000);
         }
 
         $DB->statement('SET FOREIGN_KEY_CHECKS=1;');

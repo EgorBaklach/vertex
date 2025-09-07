@@ -30,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        array_map(fn($class) => $this->app->extend($class, fn(SourceInterface $source) => new APIManager($source)), [Tokens::class, Proxies::class]);
+        foreach([Tokens::class, Proxies::class] as $class) $this->app->extend($class, fn(SourceInterface $source) => new APIManager($source));
     }
 
     public function boot(): void
@@ -40,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton('json_decoder', fn() => new ExtJsonDecoder(true, 512, JSON_BIGINT_AS_STRING));
 
         $this->app->singleton(ImageManagerInterface::class, fn() => new ImageManager(new Driver));
+
+        $this->app->singleton('timestamp', fn() => floor(microtime(true) * 1000));
 
         $this->app->singleton('categories', fn() => [
             'wb' => [
@@ -77,11 +79,11 @@ class AppServiceProvider extends ServiceProvider
                     'parent' => fn() => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/parent/all', 'WB'),
                     'children' => fn(int $cid) => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/all?'.http_build_query(['parentID' => $cid, 'limit' => 1000]), 'WB', 'get', null, $cid)
                 ],
-                WB\Properties::class => fn(string $operation, int $cid) => match($operation)
+                WB\Properties::class => fn(string $position, string $operation, int $cid) => call_user_func(fn(string $endpoint) => $manager->enqueue($endpoint, 'WB:'.$position, 'get', null, $operation, $cid), match($operation)
                 {
-                    'properties' => $manager->enqueue('https://content-api.wildberries.ru/content/v2/object/charcs/'.$cid, 'WB', 'get', null, 'properties', $cid),
-                    'tnved' => $manager->enqueue('https://content-api.wildberries.ru/content/v2/directory/tnved?subjectID='.$cid, 'WB', 'get', null, 'tnved', $cid)
-                },
+                    'properties' => 'https://content-api.wildberries.ru/content/v2/object/charcs/'.$cid,
+                    'tnved' => 'https://content-api.wildberries.ru/content/v2/directory/tnved?subjectID='.$cid
+                }),
                 WB\Directories::class => fn(string $operation, int $pid) => $manager->enqueue('https://content-api.wildberries.ru/content/v2/directory/'.$operation.'?locale=ru', 'WB', 'get', null, $operation, $pid),
                 WB\Products::class => [
                     ['card', 'https://content-api.wildberries.ru/content/v2/get/cards/list', ['settings' => ['cursor' => [], 'filter' => ['withPhoto' => -1]]]],
@@ -102,7 +104,7 @@ class AppServiceProvider extends ServiceProvider
                     return $manager;
                 },
                 WB\FBSStocks::class => [
-                    'amounts' => fn(WBFBSStocks $stock, array $skus, int $last_id) => $manager->enqueue('https://marketplace-api.wildberries.ru/api/v3/stocks/'.$stock->id, 'WB:'.$stock->tid, 'post', compact('skus'), $stock, $last_id),
+                    'amounts' => fn(WBFBSStocks $stock, array $skus) => count($skus) && $manager->enqueue('https://marketplace-api.wildberries.ru/api/v3/stocks/'.$stock->id, 'WB:'.$stock->tid, 'post', compact('skus'), $stock),
                     'stocks' => function(string $operation) use ($manager)
                     {
                         foreach($manager->source->all('WB') as $token) match($operation)
@@ -120,12 +122,12 @@ class AppServiceProvider extends ServiceProvider
                 ////////////
 
                 OZON\Categories::class => fn() => $manager->enqueue('https://api-seller.ozon.ru/v1/description-category/tree', 'OZON', 'post'),
-                OZON\Properties::class => fn(string $operation, CT $ct) => $manager->enqueue('https://api-seller.ozon.ru/v1/description-category/attribute', 'OZON:'.$operation, 'post', ['description_category_id' => $ct->cid, 'type_id' => $ct->tid], $ct->cid, $ct->tid),
-                OZON\Dictionaries::class => function(string $operation, OZONProperties $property, int $last_value_id = 0) use ($manager)
+                OZON\Properties::class => fn(string $position, CT $ct) => $manager->enqueue('https://api-seller.ozon.ru/v1/description-category/attribute', 'OZON:'.$position, 'post', ['description_category_id' => $ct->cid, 'type_id' => $ct->tid], $ct->cid, $ct->tid),
+                OZON\Dictionaries::class => function(string $position, OZONProperties $property, int $last_value_id = 0) use ($manager)
                 {
                     $post = ['attribute_id' => $property->id, 'limit' => 2000] + compact('last_value_id') + Func::call($property->ctps->first(), fn(CTP $ctp) => ['description_category_id' => $ctp->cid, 'type_id' => $ctp->tid]);
 
-                    $manager->enqueue('https://api-seller.ozon.ru/v1/description-category/attribute/values', 'OZON:'.$operation, 'post', $post, $property);
+                    $manager->enqueue('https://api-seller.ozon.ru/v1/description-category/attribute/values', 'OZON:'.$position, 'post', $post, $property);
                 },
                 OZON\Products::class => fn(string $operation, array $values) => match($operation)
                 {

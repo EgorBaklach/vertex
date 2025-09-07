@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $token
  * @property array|null $params
+ * @property array $days
  * @property int $process
  * @property int $success
  * @property int $abort
@@ -36,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @method static Builder<static>|MarketplaceApiKey whereMarketplace($value)
  * @method static Builder<static>|MarketplaceApiKey whereName($value)
  * @method static Builder<static>|MarketplaceApiKey whereParams($value)
+ * @method static Builder<static>|MarketplaceApiKey whereDays($value)
  * @method static Builder<static>|MarketplaceApiKey whereProcess($value)
  * @method static Builder<static>|MarketplaceApiKey whereSuccess($value)
  * @method static Builder<static>|MarketplaceApiKey whereToken($value)
@@ -54,13 +56,15 @@ class MarketplaceApiKey extends Model
         'active',
         'name',
         'token',
-        'params'
+        'params',
+        'days'
     ];
 
     protected function casts(): array
     {
         return [
-            'params' => 'array'
+            'params' => 'array',
+            'days' => 'array'
         ];
     }
 
@@ -82,5 +86,15 @@ class MarketplaceApiKey extends Model
                 'WB' => ['withToken' => $this->token], default => ['withHeaders' => [$this->params + ['Api-Key' => $this->token]]]
             }
         );
+    }
+
+    public function setDaysAttribute($value): void
+    {
+        sort($value); $this->attributes['days'] = json_encode($value, JSON_NUMERIC_CHECK);
+    }
+
+    public function getDaysStringAttribute(): string
+    {
+        return count($this->days) ? implode(', ', array_map(fn($day) => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][$day -1] ?? $day, $this->days)) : 'Не выбрано';
     }
 }

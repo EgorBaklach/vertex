@@ -30,7 +30,7 @@ abstract class TokensAbstract extends MSAbstract
 
     protected function commit(APIManager $manager)
     {
-        $manager->source->reset('OZON', 250000); $this->counter = -1;
+        $manager->source->reset('OZON', 250000); $this->counter = 0;
 
         $manager->init(function(Response $response, $attributes, ...$custom)
         {
@@ -46,17 +46,12 @@ abstract class TokensAbstract extends MSAbstract
             }
         });
 
-        $this->commitAfter(); return $manager->source->{$this->index()}('OZON');
+        $this->commitAfter(); return $manager->source->current('WB');
     }
 
     protected function enqueue(...$values): void
     {
-        $this->endpoint(Tokens::class, $this->index(), ...$values);
-    }
-
-    private function index(): string
-    {
-        return !++$this->counter || $this->counter % self::limit ? 'current' : 'next';
+        $this->endpoint(Tokens::class, ++$this->counter && $this->counter % self::limit === 0 ? 'next' : 'current', ...$values);
     }
 
     protected function reset(): void

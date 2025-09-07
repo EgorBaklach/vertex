@@ -26,6 +26,10 @@ class Properties extends MSAbstract
 
     private array $tnveds = [];
 
+    protected int $counter = -1;
+
+    private const limit = 3;
+
     private const additionals = [
         'colors' => 'Цвет',
         'kinds' => 'Пол',
@@ -81,43 +85,52 @@ class Properties extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); if($tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first())) $this->tvend_pid = $tvend_pid;
+        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        $manager->source->handlers['next'] = fn(string $market) => $manager->source->next($market) ?: $manager->source->reset($market, 500000)->current($market);
-
-        /*$start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); if($tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first())) $this->tvend_pid = $tvend_pid;
-
-        $manager->source->handlers['next'] = fn(string $market) => Func::call($manager->source, fn(Tokens $source) => $source->next($market) ?: $source->reset($market, 500000)->current($market));
+        if($tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first())) $this->tvend_pid = $tvend_pid;
 
         if($this->operation->counter === 1) $this->updateInstances(PV::query()->whereIn('pid', Settings::whereLike('variable', '%pid')->pluck('value')->all() ?? []));
 
+        $manager->source->handlers['next'] = fn() => $manager->source->next('WB') ?: $this->commit($manager);
+
         foreach(['properties', 'tnved'] as $operation)
         {
-            $last_id = 0;
+            $count = 0;
 
-            while(true)
+            foreach(Categories::query()->orderBy('id')->pluck('id') as $id)
             {
-                foreach(Categories::query()->where('id', '>', $last_id)->orderBy('id')->limit(5)->pluck('id') as $id) $this->endpoint(Tokens::class, $operation, $last_id = $id); if(!$manager->count()) break;
+                $this->endpoint(Tokens::class, ++$this->counter && $this->counter % self::limit === 0 ? 'next' : 'current', $operation, $id);
 
-                $manager->init(function(Response $response, $attributes, string $operation, int $id)
-                {
-                    if(!is_array($values = $response->json('data'))) throw new ($response->status() === 429 ? RepeatException::class : ErrorException::class)($response);
-
-                    foreach($values as $value) $this->{$operation}($value, $id);
-                });
-
-                foreach($this->results as $class => $values) $class::upsert($values, []); if(array_key_exists(PV::class, $this->results)) Logs::query()->where('entity', 'wb_pv')->delete(); $this->results = [];
+                if(++$count % 500 === 0) Log::channel('wb')->info(implode(' | ', ['WB Properties chunks', $operation, $count]));
             }
+
+            while($manager->count()) $this->commit($manager); Log::channel('wb')->info(implode(' | ', ['WB Properties finish', $operation, $count]));
         }
 
         Log::channel('wb')->info(implode(' | ', ['RESULT', Time::during(time() - $start)]));
-        Log::channel('wb')->info(implode(' | ', ['WB Properties', ...Arr::map($this->counts(ModelProperties::class), fn($v, $k) => $k.': '.$v)]));*/
+        Log::channel('wb')->info(implode(' | ', ['WB Properties', ...Arr::map($this->counts(ModelProperties::class), fn($v, $k) => $k.': '.$v)]));
 
-        /** @var Builder|string $class */
-
-        /*Schedule::shortUpsert([
+        Schedule::shortUpsert([
             ['market' => 'WB', 'operation' => 'PROPERTIES', 'next_start' => null, 'counter' => 0],
             ['market' => 'WB', 'operation' => 'DIRECTORIES', 'next_start' => time(), 'counter' => 0]
-        ]);*/
+        ]);
+    }
+
+    private function commit(APIManager $manager)
+    {
+        $manager->source->reset('WB', 600000);
+
+        $manager->init(function(Response $response, $attributes, string $operation, int $id)
+        {
+            if(!is_array($values = $response->json('data'))) throw new ($response->status() === 429 ? RepeatException::class : ErrorException::class)($response);
+
+            foreach($values as $value) $this->{$operation}($value, $id);
+        });
+
+        foreach($this->results as $class => $values) /** @var Builder|string $class */ $class::upsert($values, []);
+
+        if(array_key_exists(PV::class, $this->results)) Logs::query()->where('entity', 'wb_pv')->delete();
+
+        $this->results = []; $this->counter = 0; return $manager->source->current('WB');
     }
 }

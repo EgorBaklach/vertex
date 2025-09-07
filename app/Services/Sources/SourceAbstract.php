@@ -29,6 +29,7 @@ abstract class SourceAbstract implements SourceInterface
     public Closure $throw;
     public Closure $skip;
 
+    /** @var callable[] */
     public array $handlers = [];
 
     public function init(SplQueue $queue): void
@@ -67,11 +68,6 @@ abstract class SourceAbstract implements SourceInterface
                 };
             }
         }
-    }
-
-    public function __get(string $name): Closure
-    {
-        return $this->handlers[$name] ?? fn() => null;
     }
 
     public function start(): void

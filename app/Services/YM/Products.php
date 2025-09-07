@@ -85,8 +85,6 @@ class Products extends MSAbstract
 
     protected const limit = 10;
 
-    private const ttl = 300;
-
     /**
      * Импорт товаров через равное кол-во пройденного времени, для сохрания ОЗУ
      *
@@ -341,7 +339,7 @@ class Products extends MSAbstract
 
     public function __invoke(): void
     {
-        /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+        /** @var string|Model|CustomQueries $class */ $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
         $this->fields = Arr::map($this->fields, fn($v, $k) => DB::raw($v ? 'CASE WHEN `active`=\'Y\' THEN `'.$k.'` ELSE VALUES(`'.$k.'`) END' : 'VALUES(`'.$k.'`)'));
 
@@ -364,6 +362,8 @@ class Products extends MSAbstract
         {
             foreach($manager->source->all('YM') as $token)
             {
+                if(!in_array($day, $token->days)) continue;
+
                 foreach([0, 1] as $archived)
                 {
                     if($query = $this->cursors[$token->id]['mappings'][$archived] ?? $this->encode())
@@ -394,7 +394,7 @@ class Products extends MSAbstract
                 }
             });
 
-            if($this->due($start)) $this->import($DB);
+            if($this->due(300 * 1000)) $this->import($DB);
         }
 
         if(count($this->results)) $this->import($DB);
