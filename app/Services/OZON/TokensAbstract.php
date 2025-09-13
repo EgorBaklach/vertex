@@ -13,13 +13,11 @@ use Throwable;
 
 abstract class TokensAbstract extends MSAbstract
 {
-    use Repeater;
-
     protected int $counter = -1;
 
     protected int $start;
 
-    protected const limit = 10;
+    protected const limit = 5;
 
     public function __invoke(): void
     {
@@ -30,7 +28,7 @@ abstract class TokensAbstract extends MSAbstract
 
     protected function commit(APIManager $manager)
     {
-        $manager->source->reset('OZON', 250000); $this->counter = 0;
+        $manager->source->reset('OZON'); $this->counter = 0;
 
         $manager->init(function(Response $response, $attributes, ...$custom)
         {
@@ -40,23 +38,16 @@ abstract class TokensAbstract extends MSAbstract
             }
             catch (Throwable $e)
             {
-                Log::channel('error')->error(implode(' | ', ['OZON '.$this->operation->operation.': '.$response->status(), $response->body()])); if($e instanceof HttpAbstract) throw $e;
-
-                throw $this->isAccess($attributes['token']) ? new NativeErrorException : new ErrorException($response);
+                Log::channel('error')->error(implode(' | ', ['OZON '.$this->operation->operation.': '.$response->status(), print_r($custom, true), $response->body()])); throw $e instanceof HttpAbstract ? $e : new NativeErrorException;
             }
         });
 
-        $this->commitAfter(); return $manager->source->current('WB');
+        $this->commitAfter(); return $manager->source->current('OZON');
     }
 
     protected function enqueue(...$values): void
     {
-        $this->endpoint(Tokens::class, ++$this->counter && $this->counter % self::limit === 0 ? 'next' : 'current', ...$values);
-    }
-
-    protected function reset(): void
-    {
-        $this->repeats = [];
+        $this->endpoint(Tokens::class, ++$this->counter && $this->counter % static::limit === 0 ? 'next' : 'current', ...$values);
     }
 
     abstract protected function collect(): mixed;

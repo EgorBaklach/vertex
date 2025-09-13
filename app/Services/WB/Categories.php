@@ -82,11 +82,11 @@ class Categories extends MSAbstract
         Log::channel('wb')->info(implode(' | ', ['RESULT', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB Categories', ...Arr::map($this->counts(ModelCategories::class), fn($v, $k) => $k.': '.$v)]));
 
+        Cache::delete($this->hash);
+
         Schedule::shortUpsert([
             ['market' => 'WB', 'operation' => 'CATEGORIES', 'next_start' => strtotime('+3 days midnight'), 'counter' => 0],
             ['market' => 'WB', 'operation' => 'PROPERTIES', 'next_start' => time(), 'counter' => 0]
         ]);
-
-        Cache::delete($this->hash);
     }
 }

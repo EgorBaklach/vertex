@@ -23,10 +23,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $abort
  * @property string|null $last_request
  * @property-read array $encode
- * @property-read Collection<int, OZONPrices> $ozon_products
- * @property-read int|null $ozon_products_count
- * @property-read Collection<int, WBProducts> $wb_products
- * @property-read int|null $wb_products_count
  * @method static Builder<static>|MarketplaceApiKey newModelQuery()
  * @method static Builder<static>|MarketplaceApiKey newQuery()
  * @method static Builder<static>|MarketplaceApiKey query()
@@ -68,16 +64,6 @@ class MarketplaceApiKey extends Model
         ];
     }
 
-    public function wb_products(): HasMany
-    {
-        return $this->hasMany(WBProducts::class, 'tid', 'id');
-    }
-
-    public function ozon_products(): HasMany
-    {
-        return $this->hasMany(OZONPrices::class, 'token_id', 'id');
-    }
-
     public function encode(): Attribute
     {
         return Attribute::make(
@@ -91,6 +77,11 @@ class MarketplaceApiKey extends Model
     public function setDaysAttribute($value): void
     {
         sort($value); $this->attributes['days'] = json_encode($value, JSON_NUMERIC_CHECK);
+    }
+
+    public function setParamsAttribute($value): void
+    {
+        $this->attributes['params'] = json_encode($value, JSON_NUMERIC_CHECK);
     }
 
     public function getDaysStringAttribute(): string

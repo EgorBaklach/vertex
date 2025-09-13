@@ -45,6 +45,7 @@ class ScheduleResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->poll() // 10s
             ->groups([Group::make('market')->titlePrefixedWithLabel(false)])
             ->columns([
                 TextColumn::make('id')->label('ID'),

@@ -1,8 +1,8 @@
 <?php namespace App\Filament\Resources\Dev\Pages;
 
 use App\Filament\Resources\Dev\MarketplaceApiKeyResource;
+use App\Filament\Resources\Dev\Traits\ParamsEdit;
 use App\Models\Dev\MarketplaceApiKey;
-
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\Toggle;
@@ -11,12 +11,14 @@ use Filament\Resources\Pages\ListRecords;
 
 class ListMarketplaceApiKeys extends ListRecords
 {
+    use ParamsEdit;
+
     protected static string $resource = MarketplaceApiKeyResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            CreateAction::make()->mutateFormDataUsing(fn(array $data) => self::params($data)),
             Action::make('counter:clear')
                 ->requiresConfirmation()
                 ->action(function (array $data)

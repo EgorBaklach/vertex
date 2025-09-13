@@ -50,7 +50,7 @@ class FBOStocks extends MSAbstract
 
             try
             {
-                $this->offset[$token->id] = ($cnt = count($amounts = $response->json('items'))) >= self::limit ? $cnt : false;
+                $this->offset[$token->id] = ($cnt = count($amounts = $response->json('items'))) > self::limit ? $cnt : false;
 
                 foreach($amounts as $amount)
                 {
@@ -74,7 +74,7 @@ class FBOStocks extends MSAbstract
                             'amount' => $amount[$type.'_stock_count']
                         ];
 
-                        $this->history('history/ozon/'.$amount['sku'].'/fbo.csv', ' | '.implode(' : ', [$amount['warehouse_name'], $type, $amount[$type.'_stock_count']]));
+                        //$this->history('history/ozon/'.$amount['sku'].'/fbo.csv', ' | '.implode(' : ', [$amount['warehouse_name'], $type, $amount[$type.'_stock_count']]));
                     }
                 }
             }

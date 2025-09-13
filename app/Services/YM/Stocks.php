@@ -18,7 +18,7 @@ use Throwable;
 
 class Stocks extends MSAbstract
 {
-    use Queries, Repeater, Tracker;
+    use Queries, Tracker;
 
     /** @var string[]|bool[] */
     private array $cursors = [];
@@ -32,8 +32,6 @@ class Stocks extends MSAbstract
         FBSAmounts::class => 'truncate',
         FBYAmounts::class => 'truncate'
     ];
-
-    protected const limit = 10;
 
     public function __get(string $name): callable
     {
@@ -74,13 +72,15 @@ class Stocks extends MSAbstract
     {
         /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
-        if($this->operation->counter === 1)
+        foreach(self::classes as $class => $method) match ($method)
         {
-            foreach(self::classes as $class => $method) match ($method)
-            {
-                'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate()
-            };
-        }
+            'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate()
+        };
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
+        {
+            $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
 
         //////////////
         /// STOCKS ///
@@ -151,11 +151,11 @@ class Stocks extends MSAbstract
 
                         foreach($warehouse['offers'] as $offer)
                         {
-                            $amounts = [];
+                            //$amounts = [];
 
                             foreach($offer['stocks'] as $stock)
                             {
-                                $amounts[] = $stock['type'].' : '.$stock['count'];
+                                //$amounts[] = $stock['type'].' : '.$stock['count'];
 
                                 $this->results[$class][implode('_', [$offer['offerId'], $warehouse['warehouseId'], $stock['type']])] = [
                                     'offer_ID' => $offer['offerId'],
@@ -167,7 +167,7 @@ class Stocks extends MSAbstract
                                 ];
                             }
 
-                            if(count($amounts)) $this->history('history/ym/'.$offer['offerId'].'/'.$class::logHistoryName, ' | '.implode(' : ', [$this->stocks[$warehouse['warehouseId']]['name'], ...$amounts]));
+                            //if(count($amounts)) $this->history('history/ym/'.$offer['offerId'].'/'.$class::logHistoryName, ' | '.implode(' : ', [$this->stocks[$warehouse['warehouseId']]['name'], ...$amounts]));
                         }
                     }
 
@@ -175,19 +175,17 @@ class Stocks extends MSAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(implode(' | ', ['YM Stock Amounts', $response->status(), $response->body(), (string) $e]));
-
-                    throw ($this->isAccess($token) || $this->cursors[$token->id][$archived] = false) ? $e : new ErrorException($response);
+                    Log::channel('error')->error(implode(' | ', ['YM Stock Amounts', $response->status(), $response->body(), (string) $e])); throw $e;
                 }
             });
 
-            if($this->due(600 * 1000)) $this->import();
+            if($this->due(600 * 1000)) $this->import();  // ЧЕРЕЗ КАЖДЫЕ 10 МИНУТ
         }
 
         $this->import(); $DB->statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        $this->operation->update(['next_start' => $this->operation->next_start > strtotime('today 14:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
-
         Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)])); foreach(self::classes as $class => $method) $this->log(new ReflectionClass($class), $method);
+
+        $this->operation->update(['next_start' => $this->operation->next_start > strtotime('today 14:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
     }
 }

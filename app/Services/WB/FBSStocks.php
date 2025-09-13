@@ -161,7 +161,7 @@ class FBSStocks extends MSAbstract
 
                 foreach($response->json('stocks') as $node)
                 {
-                    $this->results[FBSAmounts::class][$node['sku']] = $node + ['sid' => $stock->id]; $this->history('history/wb/'.$node['sku'].'/fbs.csv', ' | '.$stock->name.': '.$node['amount']);
+                    $this->results[FBSAmounts::class][$node['sku']] = $node + ['sid' => $stock->id]; //$this->history('history/wb/'.$node['sku'].'/fbs.csv', ' | '.$stock->name.': '.$node['amount']);
                 }
             }
             catch (Throwable $e)

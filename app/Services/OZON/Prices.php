@@ -10,9 +10,8 @@ use App\Models\Dev\Schedule;
 use App\Models\Dev\Traits\CustomQueries;
 use App\Services\APIManager;
 use App\Services\MSAbstract;
-use App\Services\OZON\Traits\{Hardcode};
 use App\Services\Sources\Tokens;
-use App\Services\Traits\{Queries, Repeater};
+use App\Services\Traits\Queries;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
@@ -23,7 +22,7 @@ use Throwable;
 
 class Prices extends MSAbstract
 {
-    use Queries, Repeater, Hardcode;
+    use Queries;
 
     /** @var int[] */
     private array $last_ids = [];
@@ -32,20 +31,20 @@ class Prices extends MSAbstract
 
     private const classes = [ModelPrices::class, Commissions::class, Indexes::class, Statuses::class];
 
-    protected const limit = 10;
-
     public function __invoke(): void
     {
         /** @var Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
-        if($this->operation->counter === 1)
+        foreach(self::classes as $class) $this->updateInstances($class::query()); Errors::query()->truncate(); ModelPrices::query()->update(['fbo' => null, 'fbs' => null]);
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
         {
-            foreach(self::classes as $class) $this->updateInstances($class::query()); Errors::query()->truncate(); ModelPrices::query()->update(['fbo' => null, 'fbs' => null]);
-        }
+            $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
 
         while(true)
         {
-            /** @var MarketplaceApiKey $token */ $stamp = floor(microtime(true) * 1000);
+            /** @var MarketplaceApiKey $token */ $timestamp = floor(microtime(true) * 1000);
 
             foreach($manager->source->all('OZON') as $token)
             {
@@ -113,7 +112,7 @@ class Prices extends MSAbstract
 
                         foreach($product['errors'] as $error) $this->results[Errors::class][md5(json_encode($error))] ??= [
                             'product_id' => $product['id'],
-                            'property_id' => array_key_exists($error['attribute_id'], self::dependencies['properties']) ? self::dependencies['properties'][$error['attribute_id']] : ($error['attribute_id'] ?: null),
+                            'property_id' => $error['attribute_id'] ?: null,
                             'code' => $error['code'] ?? null,
                             'field' => strlen($error['field']) ? $error['field'] : null,
                             'level' => call_user_func(Cutter::after, 'ERROR_LEVEL_', $error['level']),
@@ -159,20 +158,23 @@ class Prices extends MSAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(['OZON Prices', $response->body(), (string) $e]); throw ($this->isAccess($token) || $this->last_ids[$token->id] = false) ? $e : new ErrorException($response);
+                    Log::channel('error')->error(['OZON Prices', $response->body(), $e->getMessage()]); throw $e;
                 }
             });
 
-            foreach(self::classes as $class) foreach(array_chunk($this->results[$class] ?? [], 2000) as $chunk) $class::shortUpsert($chunk); $DB->statement('SET FOREIGN_KEY_CHECKS=0;');
+            foreach(self::classes as $class) foreach(array_chunk($this->results[$class] ?? [], 2000) as $chunk) $class::shortUpsert($chunk);
 
-            if(array_key_exists(Errors::class, $this->results)) foreach(array_chunk($this->results[Errors::class], 2000) as $chunk) Errors::query()->insert($chunk);
+            if(count($this->results[Errors::class] ?? []))
+            {
+                $DB->statement('SET FOREIGN_KEY_CHECKS=0;'); foreach(array_chunk($this->results[Errors::class], 2000) as $chunk) Errors::query()->insert($chunk); $DB->statement('SET FOREIGN_KEY_CHECKS=1;');
+            }
 
-            $DB->statement('SET FOREIGN_KEY_CHECKS=1;'); $this->results = []; if(floor(microtime(true) * 1000) - $stamp <= 500) sleep(1);
+            $this->results = []; if(floor(microtime(true) * 1000) - $timestamp <= 500) sleep(1);
         }
 
-        Log::channel('ozon')->info('OZON Prices | Time to keep history');
+        //Log::channel('ozon')->info('OZON Prices | Time to keep history');
 
-        foreach($this->prices as $sku => $price) Storage::disk('local')->append('history/ozon/'.$sku.'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...array_values(Arr::map($price, fn($v, $k) => $k.': '.$v))]));
+        //foreach($this->prices as $sku => $price) Storage::disk('local')->append('history/ozon/'.$sku.'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...array_values(Arr::map($price, fn($v, $k) => $k.': '.$v))]));
 
         Log::channel('ozon')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
 

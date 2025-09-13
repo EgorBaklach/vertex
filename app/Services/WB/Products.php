@@ -190,7 +190,7 @@ class Products extends MSAbstract
                 {
                     if($response->status() !== 429) Log::channel('error')->error(implode(' | ', ['WB Products',  $response->status(), $response->body()]));
 
-                    usleep(100); throw $this->isAccess($attributes['token']) ? $e : new ErrorException($response);
+                    throw $this->isAccess($attributes['token']) ? $e : new ErrorException($response);
                 }
             });
 
@@ -221,14 +221,14 @@ class Products extends MSAbstract
 
         MarketplaceApiKey::query()->where('marketplace', 'WB')->update(['active' => 'Y']); Cache::delete($this->hash);
 
-        Schedule::shortUpsert([
-            ['market' => 'WB', 'operation' => 'PRODUCTS', 'next_start' => strtotime('tomorrow 2:00'), 'counter' => 0],
-            ['market' => 'WB', 'operation' => 'FBS_STOCKS', 'next_start' => time(), 'counter' => 0]
-        ]);
-
         Log::channel('wb')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB Products', ...Arr::map($this->counts(ModelProducts::class), fn($v, $k) => $k.': '.$v)]));
         Log::channel('wb')->info(implode(' | ', ['WB Property values', ...Arr::map($this->counts(PV::class), fn($v, $k) => $k.': '.$v)]));
         Log::channel('wb')->info(implode(' | ', ['WB Sizes', ...Arr::map($this->counts(Sizes::class), fn($v, $k) => $k.': '.$v)]));
+
+        Schedule::shortUpsert([
+            ['market' => 'WB', 'operation' => 'PRODUCTS', 'next_start' => strtotime('tomorrow 3:00'), 'counter' => 0],
+            ['market' => 'WB', 'operation' => 'FBS_STOCKS', 'next_start' => time(), 'counter' => 0]
+        ]);
     }
 }

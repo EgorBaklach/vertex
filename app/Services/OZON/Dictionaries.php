@@ -1,7 +1,6 @@
 <?php namespace App\Services\OZON;
 
 use App\Helpers\Time;
-use App\Models\Dev\Logs;
 use App\Models\Dev\OZON\Properties;
 use App\Models\Dev\OZON\PV;
 use App\Services\Traits\Queries;
@@ -19,11 +18,11 @@ class Dictionaries extends TokensAbstract
 
     private SplQueue $queue;
 
+    protected const limit = 10;
+
     protected function collect(): Collection
     {
-        if($this->operation->counter === 1) $this->updateInstances(PV::query()); $this->queue = new SplQueue;
-
-        return Properties::query()->whereNotNull('did')->groupBy('did')->get();
+        $this->queue = new SplQueue; return Properties::query()->whereNotNull('did')->groupBy('did')->get();
     }
 
     protected function pull(Response $response, array $attributes, callable $callback): void
@@ -48,7 +47,7 @@ class Dictionaries extends TokensAbstract
 
     protected function commitAfter(): void
     {
-        foreach(array_chunk($this->results, 5000) as $chunk) PV::shortUpsert($chunk); $this->results = []; Logs::query()->where('entity', 'ozon_pv')->delete();
+        foreach(array_chunk($this->results, 5000) as $chunk) PV::shortUpsert($chunk); $this->results = [];
 
         while(!$this->queue->isEmpty()) $this->enqueue(...$this->queue->dequeue());
     }

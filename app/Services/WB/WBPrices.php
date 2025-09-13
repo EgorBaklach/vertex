@@ -83,12 +83,12 @@ class WBPrices extends MSAbstract
         {
             Cache::delete($this->hash); $fields = ['price', 'wbPrice', 'discountedPrice', 'clubDiscountedPrice', 'discount', 'clubDiscount']; /** @var Sizes $size */
 
-            Log::channel('wb')->info('WB WBPrices | Time to keep history');
+            //Log::channel('wb')->info('WB WBPrices | Time to keep history');
 
-            foreach(Sizes::query()->where('active', 'Y')->whereHas('price', fn(Builder $builder) => $builder->where('active', 'Y')->where('price', '>', 0))->distinct('sku')->get() as $size)
+            /*foreach(Sizes::query()->where('active', 'Y')->whereHas('price', fn(Builder $builder) => $builder->where('active', 'Y')->where('price', '>', 0))->distinct('sku')->get() as $size)
             {
                 Storage::disk('local')->append('history/wb/'.$size->sku.'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...array_map(fn($v) => $v.': '.($size->price->{$v} ?? 'null'), $fields)]));
-            }
+            }*/
 
             Log::channel('wb')->info(implode(' | ', ['RESULT', Time::during(time() - $start)]));
             Log::channel('wb')->info(implode(' | ', ['WB WBPrices', ModelPrices::query()->whereNotNull('wbPrice')->count()]));

@@ -35,7 +35,7 @@ class Categories extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); if($this->operation->counter === 1) $this->updateInstances(ModelCategories::query()); ModelCategories::query()->update(['childs' => 0]);
+        $start = time(); $this->updateInstances(ModelCategories::query()); ModelCategories::query()->update(['childs' => 0]);
 
         $this->endpoint(Tokens::class)->init(function(Response $response)
         {
@@ -49,7 +49,7 @@ class Categories extends MSAbstract
             }
         });
 
-        if(!count($this->results)) return; foreach(array_chunk($this->results, 2000) as $chunk) ModelCategories::shortUpsert($chunk);
+        foreach(array_chunk($this->results, 2000) as $chunk) ModelCategories::shortUpsert($chunk);
 
         Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)]));
         Log::channel('ym')->info(implode(' | ', ['YM Categories', ...Arr::map($this->counts(ModelCategories::class), fn($v, $k) => $k.': '.$v)]));

@@ -35,7 +35,7 @@ use Throwable;
 
 class Products extends MSAbstract
 {
-    use Queries, Repeater, RecommendationFields, Tracker;
+    use Queries, RecommendationFields, Tracker;
 
     /** @var string[]|bool[] */
     private array $cursors = [];
@@ -82,8 +82,6 @@ class Products extends MSAbstract
 
         Recommendations::class => ['method' => 'skip', 'foreign_key_check' => true]
     ];
-
-    protected const limit = 10;
 
     /**
      * Импорт товаров через равное кол-во пройденного времени, для сохрания ОЗУ
@@ -221,16 +219,16 @@ class Products extends MSAbstract
 
                 // PRICES
 
-                $pricies = [];
+                //$pricies = [];
 
                 foreach(['basic', 'purchase', 'additionalExpenses' => 'expenses', 'cofinance'] as $key => $type)
                 {
                     if(!array_key_exists($key = is_string($key) ? $key : $type.'Price', $product['offer'])) continue;
 
-                    $pricies[] = $type.': '.Func::call($product['offer'][$key], fn(array $price) => match ($type)
-                        {
-                            'basic' => implode(' / ', Arr::map(['value', 'discountBase'], fn($k) => $price[$k] ?? 0)), default => $price['value']
-                        });
+                    /*$pricies[] = $type.': '.Func::call($product['offer'][$key], fn(array $price) => match ($type)
+                    {
+                        'basic' => implode(' / ', Arr::map(['value', 'discountBase'], fn($k) => $price[$k] ?? 0)), default => $price['value']
+                    });*/
 
                     $this->results[Prices::class][implode('_', [$product['offer']['offerId'], $type])] = [
                         'offer_id' => $product['offer']['offerId'],
@@ -241,7 +239,7 @@ class Products extends MSAbstract
                     ];
                 }
 
-                if(count($pricies)) Storage::disk('local')->append('history/ym/'.$product['offer']['offerId'].'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...$pricies]));
+                //if(count($pricies)) Storage::disk('local')->append('history/ym/'.$product['offer']['offerId'].'/price.csv', implode(' | ', [date('Y-m-d H:i:s'), ...$pricies]));
             }
 
             return strlen($paging['nextPageToken'] ?? '') ? $this->encode($paging['nextPageToken']) : false;
@@ -343,26 +341,28 @@ class Products extends MSAbstract
 
         $this->fields = Arr::map($this->fields, fn($v, $k) => DB::raw($v ? 'CASE WHEN `active`=\'Y\' THEN `'.$k.'` ELSE VALUES(`'.$k.'`) END' : 'VALUES(`'.$k.'`)'));
 
+        foreach(self::classes as $class => $value) match ($value['method'])
+        {
+            'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate(), default => null
+        };
+
+        Recommendations::query()->where('product_offer_id', '!=', '0')->delete(); Categories::query()->update(['cnt' => 0]);
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
+        {
+            $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
+
         $manager->source->ttl = [
             'connectTimeout' => 60,
             'timeout' => 45
         ];
 
-        if($this->operation->counter === 1)
-        {
-            foreach(self::classes as $class => $value) match ($value['method'])
-            {
-                'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate(), default => null
-            };
-
-            Recommendations::query()->where('product_offer_id', '!=', '0')->delete(); Categories::query()->update(['cnt' => 0]);
-        }
-
         while(true)
         {
             foreach($manager->source->all('YM') as $token)
             {
-                if(!in_array($day, $token->days)) continue;
+                //if(!in_array($day, $token->days)) continue;
 
                 foreach([0, 1] as $archived)
                 {
@@ -388,22 +388,20 @@ class Products extends MSAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(implode(' | ', ['YM Products', $response->status(), $response->body(), (string) $e]));
-
-                    throw ($this->isAccess($attributes['token']) || $injector(false)) ? $e : new ErrorException($response);
+                    Log::channel('error')->error(implode(' | ', ['YM Products', $response->status(), $response->body(), $e->getMessage()])); throw $e;
                 }
             });
 
-            if($this->due(300 * 1000)) $this->import($DB);
+            if($this->due(300 * 1000)) $this->import($DB); // ЧЕРЕЗ КАЖДЫЕ 5 МИНУТ
         }
 
         if(count($this->results)) $this->import($DB);
+
+        Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)])); foreach(self::classes as $class => $value) $this->log(new ReflectionClass($class), $value['method']);
 
         Schedule::shortUpsert([
             ['market' => 'YM', 'operation' => 'PRODUCTS', 'next_start' => strtotime('tomorrow 9:00'), 'counter' => 0],
             ['market' => 'YM', 'operation' => 'STOCKS', 'next_start' => time(), 'counter' => 0]
         ]);
-
-        Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)])); foreach(self::classes as $class => $value) $this->log(new ReflectionClass($class), $value['method']);
     }
 }

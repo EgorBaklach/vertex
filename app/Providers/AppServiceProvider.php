@@ -158,10 +158,7 @@ class AppServiceProvider extends ServiceProvider
                 //////////
 
                 YM\Categories::class => fn() => $manager->enqueue('https://api.partner.market.yandex.ru/categories/tree', 'YM', 'post', ['language' => 'RU']),
-                YM\Properties::class => function(array $sids) use ($manager)
-                {
-                    foreach($sids as $sid) $manager->enqueue('https://api.partner.market.yandex.ru/category/'.$sid.'/parameters', 'YM', 'post'); return $manager;
-                },
+                YM\Properties::class => fn(string $position, int $sid) => $manager->enqueue('https://api.partner.market.yandex.ru/category/'.$sid.'/parameters', 'YM:'.$position, 'post'),
                 YM\Products::class => fn(string $operation, MarketplaceApiKey $token, string $query, callable $injector) => match($operation)
                 {
                     'mappings' => fn(bool $archived) => $manager->enqueue('https://api.partner.market.yandex.ru/businesses/'.$token->params['business']['id'].'/offer-mappings?'.$query, $token, 'post', compact('archived'), 'mappings', $injector),

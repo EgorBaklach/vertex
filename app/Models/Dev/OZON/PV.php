@@ -40,8 +40,7 @@ class PV extends Model
         'active',
         'value',
         'info',
-        'picture',
-        'custom'
+        'picture'
     ];
 
     public function property(): BelongsTo

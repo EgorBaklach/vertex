@@ -58,7 +58,9 @@ class Categories extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); foreach([ModelCategories::class, Types::class] as $class) /** @var Model $class */ $this->updateInstances($class::query()); ModelCategories::query()->update(['childs' => 0]);
+        $start = time(); foreach([ModelCategories::class, Types::class] as $class) /** @var Model $class */ $this->updateInstances($class::query());
+
+        CT::query()->truncate(); ModelCategories::query()->update(['childs' => 0]);
 
         $this->endpoint(Tokens::class)->init(fn(Response $response) => $this->recursive($response->json('result'))); if($this->counter) $this->iterate();
 
@@ -74,10 +76,10 @@ class Categories extends MSAbstract
 
     private function iterate(): void
     {
-        foreach([ModelCategories::class, 'update', Types::class, CT::class] as $key) if(count($values = $this->results[$key] ?? [])) match ($key)
+        foreach([ModelCategories::class, 'update', Types::class, CT::class] as $node) if(count($values = $this->results[$node] ?? [])) match ($node)
         {
             'update' => ModelCategories::upsert($values, [], ['childs' => DB::raw('`childs` + values(`childs`)')]),
-            default => Func::call($key, fn(string|ModelCategories|Types $class) => $class::shortUpsert($values))
+            default => Func::call($node, fn(string|ModelCategories|Types $class) => $class::shortUpsert($values))
         };
 
         $this->results = []; $this->counter = 0;

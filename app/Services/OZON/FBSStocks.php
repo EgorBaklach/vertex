@@ -26,14 +26,7 @@ class FBSStocks extends MSAbstract
     {
         /** @var CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        match($this->operation->counter)
-        {
-            1 => call_user_func(function()
-            {
-                $this->updateInstances(ModelFBSStocks::query()); FBSAmounts::query()->truncate();
-            }),
-            default => sleep($this->operation->counter * 15)
-        };
+        $this->updateInstances(ModelFBSStocks::query()); FBSAmounts::query()->truncate();
 
         //////////////////
         /// GET STOCKS ///
@@ -124,7 +117,7 @@ class FBSStocks extends MSAbstract
                                 'amount' => $amount[$type]
                             ];
 
-                            $this->history('history/ozon/'.$amount['sku'].'/fbs.csv', ' | '.implode(' : ', [$amount['warehouse_name'], $type, $amount[$type]]));
+                            //$this->history('history/ozon/'.$amount['sku'].'/fbs.csv', ' | '.implode(' : ', [$amount['warehouse_name'], $type, $amount[$type]]));
                         }
                     }
                 }

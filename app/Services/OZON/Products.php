@@ -1,33 +1,33 @@
 <?php namespace App\Services\OZON;
 
-use App\Exceptions\Http\ErrorException;
 use App\Exceptions\Http\SuccessException;
 use App\Helpers\Arr;
 use App\Helpers\Func;
 use App\Helpers\Time;
-use App\Models\Dev\Logs;
 use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\Schedule;
-use App\Services\OZON\Traits\Hardcode;
-use App\Models\Dev\OZON\{Files, PPV, Products as ModelProducts, Properties, PV, Types};
+use App\Services\MSAbstract;
+use App\Models\Dev\OZON\{CT, Files, PPV, Products as ModelProducts, Properties, PV, Types};
 use App\Services\APIManager;
 use App\Services\Sources\Tokens;
 use App\Services\Traits\Queries;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
+ * @method null|Properties properties(int $id)
+ * @method null|int cts(int $cid, int $pid)
+ *
  * @property callable list
  * @property callable attributes
  */
-class Products extends TokensAbstract
+class Products extends MSAbstract
 {
-    use Queries, Hardcode;
+    use Queries;
 
-    private array $properties = [];
+    private array $entities = [];
 
     /** @var string[]|bool[] */
     private array $cursors = [];
@@ -67,6 +67,11 @@ class Products extends TokensAbstract
         };
     }
 
+    public function __call(string $name, array $arguments)
+    {
+        return Arr::get($this->entities[$name], ...$arguments);
+    }
+
     private function list(array $response, int $token_id): ?string
     {
         foreach($response['result']['items'] ?? [] as $product)
@@ -90,7 +95,11 @@ class Products extends TokensAbstract
     {
         foreach($response['result'] ?? [] as $product)
         {
-            if($tid = self::dependencies['types'][$product['type_id']] ?? $product['type_id'] ?: null): $this->results[Types::class][$tid] ??= ['id' => $tid, 'cnt' => 0]; $this->results[Types::class][$tid]['cnt']++; endif;
+            // TODO Может логировать товары у которых некорректные категория или тип товара?
+
+            if(!$this->cts($product['description_category_id'], $product['type_id'])) continue;
+
+            $this->results[Types::class][$product['type_id']] ??= ['id' => $product['type_id'], 'cnt' => 0]; $this->results[Types::class][$product['type_id']]['cnt']++;
 
             $this->results[ModelProducts::class][$product['id']] = call_user_func($this->attributes, array_combine(array_keys(self::fields), [
                 $product['id'],
@@ -99,8 +108,8 @@ class Products extends TokensAbstract
                 $product['offer_id'],
                 strlen($product['barcode']) ? $product['barcode'] : null,
                 $token_id,
-                self::dependencies['categories'][$product['description_category_id']] ?? $product['description_category_id'] ?: null,
-                $tid,
+                $product['description_category_id'],
+                $product['type_id'],
                 $product['name'] ?? null,
                 call_user_func(fn(array $ar) => count($ar) ? implode(':', $ar) : null, Arr::map(['depth', 'width', 'height'], fn($v) => $product[$v] ?? '')),
                 $product['dimension_unit'] ?? null,
@@ -133,7 +142,9 @@ class Products extends TokensAbstract
             {
                 foreach($product[$state] ?? [] as $property)
                 {
-                    if(!$pid = array_key_exists($property['id'], self::dependencies['properties']) ? self::dependencies['properties'][$property['id']] : $property['id']) continue;
+                    // TODO Аналогично, при отсутствии корректной характеристики, нужно ли ее также логировать?
+
+                    if(!$this->properties($property['id'])) continue;
 
                     foreach($property['values'] as $value)
                     {
@@ -141,23 +152,22 @@ class Products extends TokensAbstract
 
                         if($value['dictionary_value_id'])
                         {
-                            if(!array_key_exists($pid, $this->properties['dids'])) continue 2;
+                            if(!$this->properties($property['id'])->did) continue 2;
 
                             $this->results[PV::class][$value['dictionary_value_id']] ??= [
                                 'id' => $value['dictionary_value_id'],
-                                'did' => $this->properties['dids'][$pid],
+                                'did' => $this->properties($property['id'])->did,
                                 'last_request' => date('Y-m-d H:i:s'),
                                 'active' => 'Y',
                                 'value' => $value['value'],
                                 'info' => null,
-                                'picture' => null,
-                                'custom' => !array_key_exists($property['id'], $this->properties['dids']) ? 'Y' : null
+                                'picture' => null
                             ];
                         }
 
-                        $this->results[PPV::class][implode(' | ', [$product['id'], $pid, $value['dictionary_value_id'] ?: $value['value']])] = [
+                        $this->results[PPV::class][implode(' | ', [$product['id'], $property['id'], $value['dictionary_value_id'] ?: $value['value']])] = [
                             'product_id' => $product['id'],
-                            'property_id' => $pid,
+                            'property_id' => $property['id'],
                             'pvid' => $value['dictionary_value_id'],
                             'value' => !$value['dictionary_value_id'] ? $value['value'] : null,
                             'is_complex' => match ($state)
@@ -177,26 +187,17 @@ class Products extends TokensAbstract
 
     public function __invoke(): void
     {
-        /** @var Model $class */ $this->start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class);
+        /** @var Model $class */ $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        if($this->operation->counter === 1)
-        {
-            $this->updateInstances(ModelProducts::query()); Types::query()->update(['cnt' => 0]);
-        }
+        $this->updateInstances(ModelProducts::query()); PPV::query()->truncate(); Types::query()->update(['cnt' => 0]);
 
-        $this->properties = Cache::remember('ozon_property_dictionaries', 3600, function()
-        {
-            foreach(Properties::query()->whereNotNull('did')->get(['id', 'did']) as $value) /** @var Properties $value */ [
-                $this->properties['ctps'][$value->did] ??= $value->ctps->first()->toArray(),
-                $this->properties['dids'][$value->id] = $value->did
-            ];
+        foreach(Properties::query()->where('active', 'Y')->get(['id', 'did']) as $property) $this->entities['properties'][$property->id] = $property;
 
-            return $this->properties;
-        });
+        foreach(CT::query()->get() as $ct) $this->entities['cts'][$ct->cid][$ct->tid] = $ct->tid;
 
         while(true)
         {
-            $start = floor(microtime(true) * 1000);
+            $timestamp = floor(microtime(true) * 1000);
 
             foreach($this->endpoint(Tokens::class, 'products', ['limit' => 1000]) as [$operator, $endpoint, $post])
             {
@@ -221,7 +222,7 @@ class Products extends TokensAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(['OZON Products', $response->body(), (string) $e]); throw ($this->isAccess($token) || $this->cursors[$visibility][$token->id] = false) ? $e : new ErrorException($response);
+                    Log::channel('error')->error(['OZON Products', $response->body(), (string) $e]); throw $e;
                 }
             });
 
@@ -240,42 +241,11 @@ class Products extends TokensAbstract
                 });
             }
 
-            $this->results = []; if(floor(microtime(true) * 1000) - $start <= 500) usleep(1000000);
+            $this->results = []; if(floor(microtime(true) * 1000) - $timestamp <= 500) sleep(1);
         }
 
-        Log::channel('ozon')->info(implode(' | ', ['RESULTS', Time::during(time() - $this->start)]));
-        Log::channel('ozon')->info(implode(' | ', ['OZON Products', 'New Properties Values', Logs::query()->where('entity', 'ozon_pv')->count()])); $this->reset(); parent::__invoke();
-    }
-
-    protected function collect(): array
-    {
-        return array_filter(array_map(fn($v) => $this->pv_read(...explode(' | ', $v)), Logs::query()->where('entity', 'ozon_pv')->pluck('value')->all()), 'boolval');
-    }
-
-    private function pv_read(int $did, string $value, $custom): mixed
-    {
-        return $custom !== 'Y' ? compact('value') + $this->properties['ctps'][$did] : false;
-    }
-
-    protected function pull(Response $response, array $attributes, callable $callback): void
-    {
-        foreach($response->json('result') as $value) $this->results[$value['id']] = array_map(fn($v) => strlen($v) ? $v : null, $value) + [
-            'did' => $this->properties['dids'][$attributes['post']['attribute_id']],
-            'last_request' => date('Y-m-d H:i:s'),
-            'active' => 'Y'
-        ];
-    }
-
-    protected function commitAfter(): void
-    {
-        PV::query()->upsert($this->results, [], ['last_request', 'info', 'picture']); $this->results = [];
-    }
-
-    protected function finish(): void
-    {
+        Log::channel('ozon')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
         Log::channel('ozon')->info(implode(' | ', ['OZON Products', ...\Illuminate\Support\Arr::map($this->counts(ModelProducts::class), fn($v, $k) => $k.': '.$v)]));
-
-        Logs::query()->where('entity', 'ozon_pv')->delete();
 
         Schedule::shortUpsert([
             ['market' => 'OZON', 'operation' => 'PRODUCTS', 'next_start' => strtotime('tomorrow 6:00'), 'counter' => 0],

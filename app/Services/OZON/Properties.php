@@ -1,11 +1,12 @@
 <?php namespace App\Services\OZON;
 
 use App\Helpers\Time;
-use App\Models\Dev\OZON\{CT, CTP, Properties as ModelProperties};
+use App\Models\Dev\OZON\{CT, CTP, Properties as ModelProperties, PV};
 use App\Models\Dev\Schedule;
 use App\Services\Traits\Queries;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -14,9 +15,11 @@ class Properties extends TokensAbstract
 {
     use Queries;
 
+    protected const limit = 10;
+
     protected function collect(): Collection
     {
-        if($this->operation->counter === 1) $this->updateInstances(ModelProperties::query());
+        $this->updateInstances(ModelProperties::query()); foreach([PV::class, CTP::class] as $class) /** @var Model $class */ $class::query()->truncate();
 
         return CT::query()->where(fn(Builder $q) => array_map(fn($r) => $q->whereHas($r, fn(Builder $b) => $b->where('active', 'Y')), ['category', 'type']))->get();
     }
@@ -51,7 +54,9 @@ class Properties extends TokensAbstract
 
     protected function commitAfter(): void
     {
-        foreach([ModelProperties::class, CTP::class] as $class) /** @var ModelProperties|CTP|string $class */ $class::shortUpsert($this->results[$class] ?? []); $this->results = [];
+        /** @var ModelProperties|CTP|string $class */
+
+        foreach([ModelProperties::class, CTP::class] as $class) foreach(array_chunk($this->results[$class] ?? [], 500) as $chunk) $class::shortUpsert($chunk); $this->results = [];
     }
 
     protected function finish(): void

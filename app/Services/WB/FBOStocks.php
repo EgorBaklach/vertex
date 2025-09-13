@@ -123,7 +123,7 @@ class FBOStocks extends MSAbstract
                     ];
                 }
 
-                Storage::disk('local')->append('history/wb/'.$sku['barcode'].'/fbo.csv', implode(' | ', Arr::map($stocks, fn($v, $k) => is_int($k) ? $v : $k.': '.$v)));
+                //Storage::disk('local')->append('history/wb/'.$sku['barcode'].'/fbo.csv', implode(' | ', Arr::map($stocks, fn($v, $k) => is_int($k) ? $v : $k.': '.$v)));
 
                 $this->results[Sizes::class][$token->id.' | '.$sku['barcode']] = [
                     'tid' => $token->id,

@@ -1,12 +1,15 @@
 <?php namespace App\Filament\Resources\Dev;
 
 use App\Filament\Clusters\Dev;
+use App\Filament\Resources\Dev\Traits\ParamsEdit;
 use App\Helpers\Func;
 use App\Models\Dev\MarketplaceApiKey;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Fieldset;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Actions;
@@ -14,9 +17,12 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 
 class MarketplaceApiKeyResource extends Resource
 {
+    use ParamsEdit;
+
     protected static ?string $model = MarketplaceApiKey::class;
 
     protected static ?string $cluster = Dev::class;
@@ -66,12 +72,26 @@ class MarketplaceApiKeyResource extends Resource
                 ])
                 ->multiple()
                 ->required(),
+            ...Arr::map(['OZON', 'YM'], fn($v) => Fieldset::make('params')->label('Параметры')->visible(fn(Get $get) => $get('marketplace') === $v)->schema(fn(Get $get) => Func::call($get('params'), fn($params) => match($v)
+            {
+                'OZON' => [
+                    TextInput::make('Params-Client-Id')->formatStateUsing(fn() => $params['Client-Id'] ?? '')->required(),
+                ],
+                'YM' => [
+                    TextInput::make('Params-domain')->formatStateUsing(fn() => $params['domain'] ?? '')->required(),
+                    TextInput::make('Params-id')->formatStateUsing(fn() => $params['id'] ?? '')->required(),
+                    TextInput::make('Params-clientId')->formatStateUsing(fn() => $params['clientId'] ?? '')->required(),
+                    TextInput::make('Params-businessId')->formatStateUsing(fn() => $params['business']['id'] ?? '')->required(),
+                    TextInput::make('Params-businessName')->formatStateUsing(fn() => $params['business']['name'] ?? '')->required(),
+                    TextInput::make('Params-placementType')->formatStateUsing(fn() => $params['placementType'] ?? '')->required(),
+                ]
+            })))
         ]);
     }
 
     private static function decode(array $array, $level = 0): string
     {
-        return implode('<br>', Arr::map($array, fn($v, $k) => str_repeat('- ', $level).'**'.$k.'**: '.(is_array($v) ? '<br>'.self::decode($v, ++$level) : $v)));
+        return implode('<br>', Arr::map($array, fn($v, $k) => str_repeat('- ', $level).'**'.$k.'**: '.(is_array($v) ? '<br>'.self::decode($v, $level + 1) : $v)));
     }
 
     public static function table(Table $table): Table
@@ -110,13 +130,13 @@ class MarketplaceApiKeyResource extends Resource
                 SelectFilter::make('market')->options(['WB' => 'WB', 'OZON' => 'OZON', 'YM' => 'YM'])->attribute('marketplace')->label('Маркетплейс')
             ])
             ->actions([
-                Actions\EditAction::make(),
+                Actions\EditAction::make()->mutateFormDataUsing(fn(array $data) => self::params($data)),
                 Actions\DeleteAction::make(),
                 Actions\ForceDeleteAction::make(),
                 Actions\RestoreAction::make()
             ])
-            ->paginationPageOptions([50,100,'all'])
-            ->defaultPaginationPageOption(50)
+            ->paginationPageOptions([100, 200, 'all'])
+            ->defaultPaginationPageOption(100)
             ->defaultGroup('marketplace');
     }
 
