@@ -224,6 +224,10 @@ class ProductsResource extends Resource
                 Filter::make('offerId')
                     ->query(fn(Builder $query, $data) => $query->when($data['offerId'], fn(Builder $query, $id) => call_user_func(fn(...$ids) => count($ids) > 1 ? $query->whereIn('offerId', $ids) : $query->whereLike('offerId', '%'.current($ids).'%'), ...explode(',', $id))))
                     ->form([TextInput::make('offerId')->label('OfferID')]),
+                SelectFilter::make('token')
+                    ->relationship('token', 'name', fn(Builder $query) => $query->has('ym_products'))
+                    ->attribute('tid')
+                    ->label('API-ключ')
             ])
             ->paginationPageOptions([25, 50, 100, 250])
             ->defaultPaginationPageOption(25)

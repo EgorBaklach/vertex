@@ -3,6 +3,7 @@
 use App\Models\Dev\OZON\Prices as OZONPrices;
 use App\Models\Dev\Traits\SourceQueries;
 use App\Models\Dev\WB\Products as WBProducts;
+use App\Models\Dev\YM\Products as YMProducts;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
@@ -72,6 +73,21 @@ class MarketplaceApiKey extends Model
                 'WB' => ['withToken' => $this->token], default => ['withHeaders' => [$this->params + ['Api-Key' => $this->token]]]
             }
         );
+    }
+
+    public function wb_products(): HasMany
+    {
+        return $this->hasMany(WBProducts::class, 'tid', 'id');
+    }
+
+    public function ozon_products(): HasMany
+    {
+        return $this->hasMany(OZONPrices::class, 'token_id', 'id');
+    }
+
+    public function ym_products(): HasMany
+    {
+        return $this->hasMany(YMProducts::class, 'tid', 'id');
     }
 
     public function setDaysAttribute($value): void
