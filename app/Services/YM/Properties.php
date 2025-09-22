@@ -1,7 +1,6 @@
 <?php namespace App\Services\YM;
 
 use App\Exceptions\Http\ErrorException;
-use App\Exceptions\Http\HttpAbstract;
 use App\Helpers\Time;
 use App\Models\Dev\Traits\CustomQueries;
 use App\Services\APIManager;
@@ -17,7 +16,6 @@ use App\Models\Dev\YM\{Categories,
     Units};
 use App\Services\MSAbstract;
 use App\Services\Traits\Queries;
-use ErrorException as NativeErrorException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
@@ -73,7 +71,7 @@ class Properties extends MSAbstract
             Recommendations::query()->where('product_offer_id', 0)->delete();
         }
 
-        foreach(Categories::query()->where('childs', 0)->where('id', '>', $prev_last_id = Cache::get($this->hash) ?? 0)->orderBy('id')->limit(count($manager->source->all('YM')) * 200)->pluck('id')->all() as $cid)
+        foreach(Categories::query()->where('childs', 0)->where('id', '>', $prev_last_id = Cache::get($this->hash) ?? 0)->orderBy('id')->pluck('id')->all() as $cid)
         {
             if($this->skip) break; $this->endpoint(Tokens::class, ++$this->counter && $this->counter % self::limit === 0 ? 'next' : 'current', $cid);
         }

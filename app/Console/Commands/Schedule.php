@@ -1,5 +1,6 @@
 <?php namespace App\Console\Commands;
 
+use App\Helpers\Func;
 use App\Models\Dev\Schedule as ModelSchedule;
 use ErrorException;
 use Illuminate\Console\Command;
@@ -16,13 +17,15 @@ class Schedule extends Command
 
     private function pending(): void
     {
-        /** @var ModelSchedule $task */ $dispatcher = [];
+        $dispatcher = [];
 
         foreach(ModelSchedule::query()->where('active', 'Y')->where('next_start', '<=', time())->get(['market', 'operation', 'ttl']) as $task)
         {
+            // TODO Сосчитать операции импорта в ручном режиме из кеша.. проверить на пустое значение SEQUENCE - если оно пусто - ручной импорт будет запущен
+
             if(Cache::get($task->name) === 'Y') continue; Cache::set($task->name, 'Y', $task->ttl);
 
-            call_user_func([$dispatcher[$task->name] = new Process(['php', 'artisan', 'schedule:pending', $task->market, $task->operation]), 'start']);
+            $process = new Process(['php', 'artisan', 'schedule:pending', $task->market, $task->operation]); $process->start(); $dispatcher[$task->name] = $process;
         }
 
         if(count($dispatcher)) while(true): sleep(1); foreach($dispatcher as $process) if($process->isRunning()) continue 2; break; endwhile;
@@ -30,8 +33,6 @@ class Schedule extends Command
 
     private function dispatch(string $market, string $operation): void
     {
-        /** @global ModelSchedule $task */
-
         try
         {
             if(!($task = ModelSchedule::query()->where('market', $market)->where('operation', $operation)->get()->first()) instanceof ModelSchedule) throw new ErrorException('There isnt operation: '.$market.'_'.$operation);

@@ -195,6 +195,11 @@ class Products extends MSAbstract
 
         foreach(CT::query()->get() as $ct) $this->entities['cts'][$ct->cid][$ct->tid] = $ct->tid;
 
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
+        {
+            $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
+
         while(true)
         {
             $timestamp = floor(microtime(true) * 1000);
@@ -222,7 +227,7 @@ class Products extends MSAbstract
                 }
                 catch (Throwable $e)
                 {
-                    Log::channel('error')->error(['OZON Products', $response->body(), (string) $e]); throw $e;
+                    Log::channel('error')->error(['OZON Products', $response->body(), $e->getMessage()]); throw $e;
                 }
             });
 
