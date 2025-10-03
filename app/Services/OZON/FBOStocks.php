@@ -42,7 +42,7 @@ class FBOStocks extends MSAbstract
             default => sleep($this->operation->counter * 10)
         };
 
-        foreach($manager->source->all('OZON') as $tid => $token) if(($offset = Arr::get($this->offset, $tid)) !== false) $this->endpoint(Tokens::class, $token, $offset ?: 0, self::limit);
+        foreach($manager->source->all() as $tid => $token) if(($offset = Arr::get($this->offset, $tid)) !== false) $this->endpoint(Tokens::class, $token, $offset ?: 0, self::limit);
 
         $manager->init(function(Response $response, $attributes)
         {

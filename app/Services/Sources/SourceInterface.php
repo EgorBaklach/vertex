@@ -1,12 +1,12 @@
 <?php namespace App\Services\Sources;
 
-use SplQueue;
+use App\Services\APIManager;
 
 interface SourceInterface
 {
-    public function init(SplQueue $queue): void;
+    public function init(APIManager $manager): void;
 
-    public function enqueue(string $endpoint, $data = null, string $method = 'get', mixed $post = null, ...$custom): void;
+    public function enqueue(string $endpoint, mixed $node = null, string $method = 'get', mixed $post = null, ...$custom): void;
 
     public function exec(callable $controller, array $responses): void;
 

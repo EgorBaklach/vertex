@@ -95,7 +95,7 @@ class Products extends MSAbstract
     {
         foreach($response['result'] ?? [] as $product)
         {
-            // TODO Может логировать товары у которых некорректные категория или тип товара?
+            // Может логировать товары у которых некорректные категория или тип товара?
 
             if(!$this->cts($product['description_category_id'], $product['type_id'])) continue;
 
@@ -142,7 +142,7 @@ class Products extends MSAbstract
             {
                 foreach($product[$state] ?? [] as $property)
                 {
-                    // TODO Аналогично, при отсутствии корректной характеристики, нужно ли ее также логировать?
+                    // Аналогично, при отсутствии корректной характеристики, нужно ли ее также логировать?
 
                     if(!$this->properties($property['id'])) continue;
 
@@ -187,9 +187,9 @@ class Products extends MSAbstract
 
     public function __invoke(): void
     {
-        /** @var Model $class */ $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class);
+        /** @var Model $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        $this->updateInstances(ModelProducts::query()); PPV::query()->truncate(); Types::query()->update(['cnt' => 0]);
+        $this->updateInstances(ModelProducts::query()->whereIn('tid', array_keys($manager->source->all()))); PPV::query()->truncate(); Types::query()->update(['cnt' => 0]);
 
         foreach(Properties::query()->where('active', 'Y')->get(['id', 'did']) as $property) $this->entities['properties'][$property->id] = $property;
 
@@ -204,15 +204,15 @@ class Products extends MSAbstract
         {
             $timestamp = floor(microtime(true) * 1000);
 
-            foreach($this->endpoint(Tokens::class, 'products', ['limit' => 1000]) as [$operator, $endpoint, $post])
+            foreach($this->endpoint(Tokens::class) as [$operator, $endpoint, $post])
             {
                 foreach(['ALL', 'ARCHIVED'] as $visibility)
                 {
-                    foreach($manager->source->all('OZON') as $tid => $token)
+                    foreach($manager->source->all() as $tid => $token)
                     {
-                        if(!in_array($day, $token->days) || ($post['last_id'] = $this->cursors[$visibility][$tid] ?? '') === false) continue; $post['filter'] = compact('visibility');
+                        if(($post['last_id'] = $this->cursors[$visibility][$tid] ?? '') === false) continue;
 
-                        $manager->enqueue($endpoint, $token, 'post', $post, $visibility, $operator);
+                        $manager->enqueue($endpoint, $token, 'post', ['limit' => 1000, 'filter' => compact('visibility')] + $post, $visibility, $operator);
                     }
                 }
             }

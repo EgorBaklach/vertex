@@ -54,7 +54,7 @@ class Properties extends MSAbstract
     {
         /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        $manager->source->handlers['next'] = fn() => $manager->source->next('YM') ?: $this->commit($manager);
+        $manager->source->handlers['next'] = fn() => $manager->source->next() ?: $this->commit($manager);
 
         $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
         {
@@ -104,7 +104,7 @@ class Properties extends MSAbstract
 
     private function commit(APIManager $manager)
     {
-        $manager->source->reset('YM');
+        $manager->source->reset();
 
         $manager->init(function(Response $response)
         {
@@ -211,6 +211,6 @@ class Properties extends MSAbstract
             }
         });
 
-        $this->counter = 0; return !$this->skip ? $manager->source->current('YM') : false;
+        $this->counter = 0; return !$this->skip ? $manager->source->current() : false;
     }
 }

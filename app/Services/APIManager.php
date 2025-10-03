@@ -8,13 +8,13 @@ use Illuminate\Support\Facades\Log;
 use SplQueue;
 use Throwable;
 
-class APIManager
+readonly class APIManager
 {
-    private SplQueue $queue;
+    public SplQueue $queue;
 
-    public function __construct(public readonly SourceInterface $source)
+    public function __construct(public SourceInterface $source)
     {
-        $source->init($this->queue = new SplQueue);
+        $this->queue = new SplQueue; $this->source->init($this);
     }
 
     public function enqueue(...$values): self

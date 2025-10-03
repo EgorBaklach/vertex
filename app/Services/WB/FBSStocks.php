@@ -7,7 +7,6 @@ use App\Models\Dev\WB\{FBSAmounts, FBSOffices, FBSStocks as ModelFBSStocks, Size
 use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
-use Illuminate\Database\Eloquent\Builder;
 use App\Services\Traits\Queries;
 use ErrorException as NativeErrorException;
 use Illuminate\Database\Eloquent\Model;
@@ -46,55 +45,54 @@ class FBSStocks extends MSAbstract
         /// GET STOCKS ///
         //////////////////
 
-        if($this->operation->counter === 1)
+        $this->updateInstances(FBSOffices::query()); $this->updateInstances(ModelFBSStocks::query()->whereIn('tid', array_keys($manager->source->all())));
+
+        ModelFBSStocks::query()->update(['total' => 0]); FBSAmounts::query()->truncate();
+
+        $this->endpoint(Tokens::class, 'stocks', 'offices')->init(function(Response $response)
         {
-            foreach([FBSOffices::class, ModelFBSStocks::class] as $class) $this->updateInstances($class::query()); ModelFBSStocks::query()->update(['total' => 0]); FBSAmounts::query()->truncate();
+            if(!$offices = $response->json()) throw new ErrorException($response);
 
-            $this->endpoint(Tokens::class, 'stocks', 'offices')->init(function(Response $response)
-            {
-                if(!$offices = $response->json()) throw new ErrorException($response);
+            foreach($offices as $office) $this->results[FBSOffices::class][$office['id']] = [
+                'id' => $office['id'],
+                'last_request' => date('Y-m-d H:i:s'),
+                'active' => 'Y',
+                'address' => $office['address'],
+                'name' => $office['name'],
+                'city' => $office['city'],
+                'longitude' => $office['longitude'],
+                'latitude' => $office['latitude'],
+                'cargoType' => $office['cargoType'],
+                'deliveryType' => $office['deliveryType'],
+                'selected' => $office['selected'] ? 'Y' : null
+            ];
+        });
 
-                foreach($offices as $office) $this->results[FBSOffices::class][$office['id']] = [
-                    'id' => $office['id'],
-                    'last_request' => date('Y-m-d H:i:s'),
-                    'active' => 'Y',
-                    'address' => $office['address'],
-                    'name' => $office['name'],
-                    'city' => $office['city'],
-                    'longitude' => $office['longitude'],
-                    'latitude' => $office['latitude'],
-                    'cargoType' => $office['cargoType'],
-                    'deliveryType' => $office['deliveryType'],
-                    'selected' => $office['selected'] ? 'Y' : null
-                ];
-            });
+        $this->endpoint(Tokens::class, 'stocks', 'stocks')->init(function(Response $response, $attributes)
+        {
+            if(!$stocks = $response->json()) throw new ErrorException($response);
 
-            $this->endpoint(Tokens::class, 'stocks', 'stocks')->init(function(Response $response, $attributes)
-            {
-                if(!$stocks = $response->json()) throw new ErrorException($response);
+            foreach($stocks as $stock) $this->results[ModelFBSStocks::class][$stock['id']] = [
+                'id' => $stock['id'],
+                'last_request' => date('Y-m-d H:i:s'),
+                'active' => 'Y',
+                'officeId' => $stock['officeId'],
+                'tid' => $attributes['token']->id,
+                'name' => $stock['name'],
+                'cargoType' => $stock['cargoType'],
+                'deliveryType' => $stock['deliveryType'],
+            ];
+        });
 
-                foreach($stocks as $stock) $this->results[ModelFBSStocks::class][$stock['id']] = [
-                    'id' => $stock['id'],
-                    'last_request' => date('Y-m-d H:i:s'),
-                    'active' => 'Y',
-                    'officeId' => $stock['officeId'],
-                    'tid' => $attributes['token']->id,
-                    'name' => $stock['name'],
-                    'cargoType' => $stock['cargoType'],
-                    'deliveryType' => $stock['deliveryType'],
-                ];
-            });
+        foreach($this->results as $class => $values) $class::query()->upsert($values, match($class)
+        {
+            ModelFBSStocks::class => ['total'], default => []
+        });
 
-            foreach($this->results as $class => $values) $class::query()->upsert($values, match($class)
-            {
-                ModelFBSStocks::class => ['total'], default => []
-            });
+        $this->results = [];
 
-            $this->results = [];
-
-            Log::channel('wb')->info(implode(' | ', ['WB FBSOffices', ...Arr::map($this->counts(FBSOffices::class), fn($v, $k) => $k.': '.$v)]));
-            Log::channel('wb')->info(implode(' | ', ['WB FBSStocks', ...Arr::map($this->counts(ModelFBSStocks::class), fn($v, $k) => $k.': '.$v)]));
-        }
+        Log::channel('wb')->info(implode(' | ', ['WB FBSOffices', ...Arr::map($this->counts(FBSOffices::class), fn($v, $k) => $k.': '.$v)]));
+        Log::channel('wb')->info(implode(' | ', ['WB FBSStocks', ...Arr::map($this->counts(ModelFBSStocks::class), fn($v, $k) => $k.': '.$v)]));
 
         /////////////////////
         /// PARSE AMOUNTS ///
@@ -105,7 +103,7 @@ class FBSStocks extends MSAbstract
             $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
         };
 
-        foreach(ModelFBSStocks::query()->where('active', 'Y')->orderBy('id')->get() as $stock)
+        foreach(ModelFBSStocks::query()->where('active', 'Y')->whereIn('tid', array_keys($manager->source->all()))->orderBy('id')->get() as $stock)
         {
             while($this->endpoint(Tokens::class, 'amounts', $stock, $this->extract(...Cache::remember($hashes[] = implode('_', ['fbs', $stock->tid, $this->last_id]), 3600, fn() => $this->inject($stock->tid)))))
             {

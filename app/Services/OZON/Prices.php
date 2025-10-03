@@ -1,6 +1,5 @@
 <?php namespace App\Services\OZON;
 
-use App\Exceptions\Http\ErrorException;
 use App\Helpers\Func;
 use App\Helpers\String\Cutter;
 use App\Helpers\Time;
@@ -17,7 +16,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class Prices extends MSAbstract
@@ -35,7 +33,12 @@ class Prices extends MSAbstract
     {
         /** @var Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
-        foreach(self::classes as $class) $this->updateInstances($class::query()); Errors::query()->truncate(); ModelPrices::query()->update(['fbo' => null, 'fbs' => null]);
+        foreach(self::classes as $class) $this->updateInstances(match($class)
+        {
+            ModelPrices::class => $class::query()->whereIn('token_id', array_keys($manager->source->all())), default => $class::query()
+        });
+
+        Errors::query()->truncate(); ModelPrices::query()->update(['fbo' => null, 'fbs' => null]);
 
         $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
         {
@@ -46,7 +49,7 @@ class Prices extends MSAbstract
         {
             /** @var MarketplaceApiKey $token */ $timestamp = floor(microtime(true) * 1000);
 
-            foreach($manager->source->all('OZON') as $token)
+            foreach($manager->source->all() as $token)
             {
                 if(($last_id = Arr::get($this->last_ids, $token->id)) === false) continue;
 
@@ -183,8 +186,8 @@ class Prices extends MSAbstract
         Log::channel('ozon')->info(implode(' | ', ['OZON Errors', Errors::query()->count()]));
 
         Schedule::shortUpsert([
-            ['market' => 'OZON', 'operation' => 'PRICES', 'next_start' => $this->operation->next_start > strtotime('today 12:00') ? null : strtotime('today 17:00'), 'counter' => 0],
-            ['market' => 'OZON', 'operation' => 'FBS_STOCKS', 'next_start' => $this->operation->next_start > strtotime('today 12:00') ? null : time(), 'counter' => 0],
+            ['market' => 'OZON', 'operation' => 'PRICES', 'next_start' => $this->operation->start > strtotime('today 12:00') ? null : strtotime('today 17:00'), 'counter' => 0],
+            ['market' => 'OZON', 'operation' => 'FBS_STOCKS', 'next_start' => $this->operation->start > strtotime('today 12:00') ? null : time(), 'counter' => 0],
         ]);
     }
 }

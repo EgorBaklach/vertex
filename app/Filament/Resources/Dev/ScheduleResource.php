@@ -52,6 +52,7 @@ class ScheduleResource extends Resource
                 TextColumn::make('active')->placeholder('NULL')->label('Вкл'),
                 TextColumn::make('operation')->label('Наименование операции'),
                 TextColumn::make('next_start')->formatStateUsing(fn($state) => date('Y-m-d H:i:s', $state))->placeholder('NULL')->label('Время след запуска'),
+                TextColumn::make('start')->formatStateUsing(fn($state) => date('Y-m-d H:i:s', $state))->placeholder('NULL')->label('Старт импорта'),
                 TextColumn::make('ttl')->label('Время жизни процесса'),
                 TextColumn::make('counter')->label('Счетчик запусков'),
                 TextColumn::make('command')->label('Оператор запуска')

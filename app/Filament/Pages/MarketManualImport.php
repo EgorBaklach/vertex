@@ -19,7 +19,6 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\MaxWidth;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -112,14 +111,16 @@ class MarketManualImport extends Page implements HasForms
             {
                 if($task = Cache::get(implode('_', ['MANUAL', 'IMPORT', $marketplace, $native_operation])))
                 {
-                    $this->stats['queue'][$operation][$marketplace] = implode(', ', Arr::map($task['tokens'], fn($tid) => $this->tokens[$marketplace][$tid]));
+                    $this->stats['queue'][$operation][$marketplace] = (count($task['sequence']) ? 'Queue: '.implode(' -> ', $task['sequence']).' | ' : '').'Tokens: '.implode(', ', Arr::map($task['tokens'], fn($tid) => $this->tokens[$marketplace][$tid]));
                 }
             }
         }
 
+        foreach(array_keys($this->markets) as $market) if($runner = Cache::get(implode('_', ['MANUAL', 'IMPORT', $market, 'IS_RUNNING']))) $this->stats['runners'][$market] = $runner['operation'];
+
         foreach(Schedule::query()->where('active', 'Y')->where('counter', '>', 0)->orderBy('market')->get() as $schedule) /** @var Schedule $schedule */
         {
-            $this->stats['processes'][$schedule->market][$schedule->operation] = compact('schedule') + ['label' => $schedule->operation.' - '.Time::during($schedule->next_start && time() > $schedule->next_start ? time() - $schedule->next_start : 0)];
+            $this->stats['processes'][$schedule->market][$schedule->operation] = compact('schedule') + ['label' => $schedule->operation.' - '.Time::during($schedule->start && time() > $schedule->start ? time() - $schedule->start : 0)];
         }
     }
 
@@ -172,10 +173,12 @@ class MarketManualImport extends Page implements HasForms
 
     public function submit(): void
     {
-        Cache::remember(implode('_', ['MANUAL', 'IMPORT', $this->data['marketplace'], self::operations[$this->data['operation']]['marketplaces'][$this->data['marketplace']]]), 86400, fn() => [
-            'tokens' => array_map(fn($v) => $v * 1, $this->data['tokens']),
+        Cache::set($hash = implode('_', ['MANUAL', 'IMPORT', $this->data['marketplace'], self::operations[$this->data['operation']]['marketplaces'][$this->data['marketplace']]]), compact('hash') + [
+            'operation' => self::operations[$this->data['operation']]['marketplaces'][$this->data['marketplace']],
+            'marketplace' => $this->data['marketplace'],
+            'tokens' => $this->data['tokens'],
             'sequence' => $this->sequence()
-        ]);
+        ], 86400);
 
         Notification::make()->title('Запуск импорта')->body(self::operations[$this->data['operation']]['label'].' для '.$this->data['marketplace'].' поставлен в очередь на выполнение')->success()->send();
 
@@ -184,7 +187,7 @@ class MarketManualImport extends Page implements HasForms
 
     private function sequence(): array
     {
-        /** @var Schedule $schedule */ $sequence = []; if($this->process('OZON', 'PRICES', 'next_start') > strtotime('today 12:00')) $this->markets['OZON']['sequence'] = ['PRODUCTS', 'PRICES'];
+        $sequence = []; if($this->process('OZON', 'PRICES', 'next_start') > strtotime('today 12:00')) $this->markets['OZON']['sequence'] = ['PRODUCTS', 'PRICES'];
 
         foreach($this->markets[$this->data['marketplace']]['sequence'] as $operation)
         {
@@ -210,7 +213,7 @@ class MarketManualImport extends Page implements HasForms
         return [
             Action::make('submit')
                 ->action(fn() => $this->submit())
-                ->modalDescription(fn() => count($sequence = $this->sequence()) ? new HtmlString('Импорт <b>"'.current($sequence).'"</b> для '.$this->data['marketplace'].' запущен в данный момент.<br>Запустить <b>"'.self::operations[$this->data['operation']]['label'].'"</b> для '.$this->data['marketplace'].' после завершения операций: <i>'.implode(' -> ', $sequence).'</i>?') : null)
+                ->modalDescription(fn() => count($sequence = $this->sequence()) ? new HtmlString('Импорт "'.current($sequence).'" для '.$this->data['marketplace'].' запущен в данный момент.<br>Запустить "'.self::operations[$this->data['operation']]['label'].'" для '.$this->data['marketplace'].' после завершения операций: <i>'.implode(' -> ', $sequence).'</i>?') : null)
                 ->disabled(fn() => count(array_diff(['operation', 'marketplace', 'tokens'], array_keys(array_filter($this->data)))))
                 ->modalHeading(fn() => count($this->sequence()) ? 'Подтвердите действие' : null)
                 ->modalFooterActionsAlignment(Alignment::Center)

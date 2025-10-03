@@ -1,6 +1,5 @@
 <?php namespace App\Services\WB;
 
-use App\Helpers\Func;
 use App\Services\APIManager;
 use App\Services\Sources\Tokens;
 use App\Exceptions\Http\{ErrorException, RepeatException};
@@ -25,7 +24,7 @@ class Categories extends MSAbstract
     {
         $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $this->last_id = Cache::get($this->hash) ?: 0;
 
-        $manager->source->handlers['next'] = fn(string $market) => Func::call($manager->source, fn(Tokens $source) => $source->next($market) ?: $source->reset($market)->current($market));
+        $manager->source->handlers['next'] = fn() => $manager->source->next() ?: $manager->source->reset()->current();
 
         if($this->operation->counter === 1)
         {

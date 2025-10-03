@@ -19,7 +19,7 @@ class ListSchedule extends ListRecords
                 ->requiresConfirmation()
                 ->action(function ()
                 {
-                    Schedule::query()->update(['counter' => 0]); Notification::make()->title('Счетчики успешно очищены')->success()->send();
+                    Schedule::query()->update(['start' => null, 'counter' => 0]); Notification::make()->title('Счетчики успешно очищены')->success()->send();
                 })
                 ->modalHeading('Подтвердите действие')
                 ->label('Очистить счетчики'),

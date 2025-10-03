@@ -1,17 +1,17 @@
 <?php namespace App\Services\Sources;
 
 use App\Helpers\Arr;
+use App\Services\APIManager;
 use App\Exceptions\Http\{ErrorException, RepeatException, SuccessException};
 use Closure;
 use ErrorException as NativeErrorException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
-use SplQueue;
 use Throwable;
 
 abstract class SourceAbstract implements SourceInterface
 {
-    protected SplQueue $queue;
+    protected APIManager $manager;
 
     protected array $attributes = [];
 
@@ -32,9 +32,9 @@ abstract class SourceAbstract implements SourceInterface
     /** @var callable[] */
     public array $handlers = [];
 
-    public function init(SplQueue $queue): void
+    public function init(APIManager $manager): void
     {
-        $this->queue = $queue;
+        $this->manager = $manager;
 
         $this->handlers['asAfter'] = function(PendingRequest $request)
         {

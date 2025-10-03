@@ -1,7 +1,5 @@
 <?php namespace App\Services\WB;
 
-use App\Helpers\Func;
-use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\Schedule;
 use App\Exceptions\Http\{ErrorException, RepeatException};
 use App\Services\APIManager;
@@ -16,7 +14,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Throwable;
 
 class Properties extends MSAbstract
 {
@@ -89,9 +86,9 @@ class Properties extends MSAbstract
 
         if($tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first())) $this->tvend_pid = $tvend_pid;
 
-        if($this->operation->counter === 1) $this->updateInstances(PV::query()->whereIn('pid', Settings::whereLike('variable', '%pid')->pluck('value')->all() ?? []));
+        $this->updateInstances(PV::query()->whereIn('pid', Settings::whereLike('variable', '%pid')->pluck('value')->all() ?? []));
 
-        $manager->source->handlers['next'] = fn() => $manager->source->next('WB') ?: $this->commit($manager);
+        $manager->source->handlers['next'] = fn() => $manager->source->next() ?: $this->commit($manager);
 
         foreach(['properties', 'tnved'] as $operation)
         {
@@ -118,7 +115,7 @@ class Properties extends MSAbstract
 
     private function commit(APIManager $manager)
     {
-        $manager->source->reset('WB', 600000);
+        $manager->source->reset(600000);
 
         $manager->init(function(Response $response, $attributes, string $operation, int $id)
         {
@@ -131,6 +128,6 @@ class Properties extends MSAbstract
 
         if(array_key_exists(PV::class, $this->results)) Logs::query()->where('entity', 'wb_pv')->delete();
 
-        $this->results = []; $this->counter = 0; return $manager->source->current('WB');
+        $this->results = []; $this->counter = 0; return $manager->source->current();
     }
 }

@@ -5,7 +5,6 @@ use App\Exceptions\Http\HttpAbstract;
 use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
-use App\Services\Traits\Repeater;
 use ErrorException as NativeErrorException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Log;
@@ -21,14 +20,19 @@ abstract class TokensAbstract extends MSAbstract
 
     public function __invoke(): void
     {
-        $this->start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $manager->source->handlers['next'] = fn() => $manager->source->next('OZON') ?: $this->commit($manager);
+        $this->start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $manager->source->handlers['next'] = fn() => $manager->source->next() ?: $this->commit($manager);
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data)
+        {
+            $this->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
 
         foreach($this->collect() as $node) $this->enqueue($node); while($manager->count()) $this->commit($manager); $this->finish();
     }
 
     protected function commit(APIManager $manager)
     {
-        $manager->source->reset('OZON'); $this->counter = 0;
+        $manager->source->reset(); $this->counter = 0;
 
         $manager->init(function(Response $response, $attributes, ...$custom)
         {
@@ -38,11 +42,13 @@ abstract class TokensAbstract extends MSAbstract
             }
             catch (Throwable $e)
             {
-                Log::channel('error')->error(implode(' | ', ['OZON '.$this->operation->operation.': '.$response->status(), print_r($custom, true), $response->body()])); throw $e instanceof HttpAbstract ? $e : new NativeErrorException;
+                Log::channel('error')->error(implode(' | ', ['OZON '.$this->operation->operation.': '.$response->status(), print_r($custom, true), $response->body()]));
+
+                throw $e instanceof HttpAbstract ? $e : new NativeErrorException;
             }
         });
 
-        $this->commitAfter(); return $manager->source->current('OZON');
+        $this->commitAfter(); return $manager->source->current();
     }
 
     protected function enqueue(...$values): void

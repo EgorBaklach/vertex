@@ -1,6 +1,5 @@
 <?php namespace App\Services\YM;
 
-use App\Exceptions\Http\ErrorException;
 use App\Helpers\Time;
 use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\Traits\CustomQueries;
@@ -74,7 +73,7 @@ class Stocks extends MSAbstract
 
         foreach(self::classes as $class => $method) match ($method)
         {
-            'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate()
+            'update' => $this->updateInstances(match($class){FBSStocks::class => $class::query()->whereIn('tid', array_keys($manager->source->all())), default => $class::query()}), 'truncate' => $class::query()->truncate()
         };
 
         $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
@@ -124,7 +123,7 @@ class Stocks extends MSAbstract
 
         while(true)
         {
-            foreach($manager->source->all('YM') as $token)
+            foreach($manager->source->all() as $token)
             {
                 foreach([0, 1] as $archived)
                 {
@@ -139,7 +138,7 @@ class Stocks extends MSAbstract
 
             $manager->init(function(Response $response, array $attributes, $archived)
             {
-                /** @var MarketplaceApiKey $token */ $token = $attributes['token'];
+                $token = $attributes['token'];
 
                 try
                 {
@@ -147,7 +146,7 @@ class Stocks extends MSAbstract
 
                     foreach($warehouses as $warehouse)
                     {
-                        /** @var string|FBYAmounts|FBSAmounts $class */ $class = $this->stocks[$warehouse['warehouseId']]['class'];
+                        $class = $this->stocks[$warehouse['warehouseId']]['class'];
 
                         foreach($warehouse['offers'] as $offer)
                         {
@@ -186,6 +185,6 @@ class Stocks extends MSAbstract
 
         Log::channel('ym')->info(implode(' | ', ['RESULT', Time::during(time() - $start)])); foreach(self::classes as $class => $method) $this->log(new ReflectionClass($class), $method);
 
-        $this->operation->update(['next_start' => $this->operation->next_start > strtotime('today 14:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
+        $this->operation->update(['next_start' => $this->operation->start > strtotime('today 14:00') ? null : strtotime('today 19:00'), 'counter' => 0]);
     }
 }

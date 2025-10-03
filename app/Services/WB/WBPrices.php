@@ -13,7 +13,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class WBPrices extends MSAbstract
@@ -44,13 +43,12 @@ class WBPrices extends MSAbstract
 
         $manager->source->throw = function(Throwable $e, $attributes, $uuid, $key) use ($manager)
         {
-            Log::channel('error')->error('WBPrices | '.$e); if($this->repeat($uuid)) $manager->source->enqueue($attributes['endpoint'], null, $attributes['method'], $attributes['post'], $uuid, $key); else $this->skip = true;
+            Log::channel('error')->error('WBPrices | '.$e); if($this->repeat($uuid)) $manager->enqueue($attributes['endpoint'], null, $attributes['method'], $attributes['post'], $uuid, $key); else $this->skip = true;
         };
 
-        $this->chunks = Cache::remember($this->hash, 600, function()
+        $this->chunks = Cache::remember($this->hash, 600, function() use ($manager)
         {
             $query = ModelPrices::query()
-                ->whereHas('token', fn(Builder $b) => $b->whereJsonContains('days', date('N') * 1))
                 ->whereHas('product', fn(Builder $builder) => $builder->where('active', 'Y'))
                 ->where(function(Builder $query)
                 {

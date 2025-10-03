@@ -9,21 +9,29 @@ use Throwable;
 
 class Tokens extends SourceAbstract
 {
+    /** @var MarketplaceApiKey[] */
     private array $tokens = [];
 
     private int $throws = 0;
 
-    public function __construct(MarketplaceApiKey $model)
+    public function __construct(string $market, string $operation, ?array $tokens = [], public bool $is_manual = false)
     {
-        foreach($model->where('active', 'Y')->orderBy('last_request')->get(['id', 'marketplace', 'token', 'params', 'days']) as $token) $this->tokens[$token->marketplace][$token->id] = $token;
+        $query = MarketplaceApiKey::query()->where('active', 'Y')->where('marketplace', $market)->orderBy('last_request');
 
-        $this->skip = fn(array $attributes) => $attributes['token']->id; foreach(['success', 'abort'] as $state) $this->{$state} = fn(HttpAbstract $e) => $e->token->inset($state);
+        if($this->is_manual) $query->whereIn('id', $tokens); else match($operation)
+        {
+            'PRODUCTS', 'PRICES' => $query->whereJsonContains('days', date('N') * 1), default => null
+        };
 
-        foreach(['current', 'next'] as $operation) $this->handlers[$operation] = fn(string $market) => $this->{$operation}($market);
+        foreach($query->get() as $token) $this->tokens[$token->id] = $token; $this->skip = fn(array $attributes) => $attributes['token']->id;
+
+        foreach(['success', 'abort'] as $state) $this->{$state} = fn(HttpAbstract $e) => $e->token->inset($state);
+
+        foreach(['current', 'next'] as $operation) $this->handlers[$operation] = fn() => $this->{$operation}();
 
         $this->repeat = function(HttpAbstract $e)
         {
-            $this->enqueue($e->endpoint, $e->token->marketplace.':'.($this->throws++ === 0 ? 'next' : 'current'), $e->method, $e->post, ...$e->custom);
+            $this->enqueue($e->endpoint, $this->throws++ === 0 ? 'next' : 'current', $e->method, $e->post, ...$e->custom);
 
             $this->skips[$e->token->id] = RepeatException::class; $e->token->inset('abort');
         };
@@ -34,40 +42,32 @@ class Tokens extends SourceAbstract
         };
     }
 
+    public function reset(int $ttl = 1): self
+    {
+        reset($this->tokens); $this->skips = []; usleep($ttl); return $this;
+    }
+
     /** @return MarketplaceApiKey[] */
-    public function all(string $market): array
+    public function all(): array
     {
-        return $this->tokens[$market];
+        return $this->tokens;
     }
 
-    public function reset(string $market, int $ttl = 1): self
+    public function current(): false|MarketplaceApiKey
     {
-        reset($this->tokens[$market]); $this->skips = []; usleep($ttl); return $this;
+        return current($this->tokens);
     }
 
-    /** @return MarketplaceApiKey|bool|null */
-    public function current(string $market): mixed
+    public function next(): false|MarketplaceApiKey
     {
-        return current($this->tokens[$market]);
+        return next($this->tokens);
     }
 
-    /** @return MarketplaceApiKey|bool|null */
-    public function next(string $market): mixed
+    public function enqueue(string $endpoint, mixed $node = null, string $method = 'get', mixed $post = null, ...$custom): void
     {
-        return next($this->tokens[$market]);
-    }
+        if(!$token = $node instanceof MarketplaceApiKey ? $node : call_user_func($this->handlers[$node ?? 'current'])) return; $token->increment('process');
 
-    /** @return MarketplaceApiKey|bool|null */
-    public function token(string $market, mixed $position = 'current'): mixed
-    {
-        return Arr::get($this->tokens, $market, $position) ?? call_user_func($this->handlers[$position], $market);
-    }
-
-    public function enqueue(string $endpoint, $data = null, string $method = 'get', mixed $post = null, ...$custom): void
-    {
-        if(is_null($data) || !$token = $data instanceof MarketplaceApiKey ? $data : $this->token(...explode(':', $data))) return; $token->increment('process');
-
-        $this->queue->enqueue(['as' => $key = (string) Str::uuid()] + $token->encode + [$method => [$endpoint, $post]]);
+        $this->manager->queue->enqueue(['as' => $key = (string) Str::uuid()] + $token->encode + [$method => [$endpoint, $post]]);
 
         $this->attributes[$key] = [compact('endpoint', 'token', 'method', 'post'), ...$custom];
     }

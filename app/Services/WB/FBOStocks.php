@@ -3,6 +3,7 @@
 use App\Exceptions\Http\ErrorException;
 use App\Helpers\Time;
 use App\Models\Dev\Logs;
+use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\WB\{FBOAmounts, FBOStocks as ModelFBOStocks, Sizes};
 use App\Services\APIManager;
 use App\Services\MSAbstract;
@@ -74,7 +75,7 @@ class FBOStocks extends MSAbstract
         {
             if(!$this->remains() || !--$this->counter) break;
 
-            $this->endpoint(Tokens::class, 'ping', fn(int $tid) => $this->results[$tid]['id'])->init(function(Response $response, $attributes)
+            $this->endpoint(Tokens::class, 'ping', fn(MarketplaceApiKey $token) => $this->results[$token->id]['id'])->init(function(Response $response, $attributes)
             {
                 if(!$node = $response->json('data')) throw new ErrorException($response); $this->results[$attributes['token']->id] = $node;
             });
@@ -84,7 +85,7 @@ class FBOStocks extends MSAbstract
 
         if($this->remains()) return;
 
-        $this->endpoint(Tokens::class, 'get', fn(int $tid) => $this->results[$tid]['id'])->init(function(Response $response, $attributes)
+        $this->endpoint(Tokens::class, 'get', fn(MarketplaceApiKey $token) => $this->results[$token->id]['id'])->init(function(Response $response, $attributes)
         {
             if(!$response->successful()) throw new ErrorException($response); $resource = $response->resource();
 
@@ -97,15 +98,15 @@ class FBOStocks extends MSAbstract
 
         $DB = DB::connection('dev'); $DB->statement('SET FOREIGN_KEY_CHECKS=0;');
 
-        foreach($this->endpoint(Tokens::class, APIManager::class)->source->all('WB') as $token)
+        foreach($this->endpoint(Tokens::class, APIManager::class)->source->all() as $token)
         {
             foreach(Items::fromFile(storage_path('app/private/reports/'.$token->id.'.json'), ['decoder' => APP::make('json_decoder')]) as $sku)
             {
-                if(!strlen($sku['barcode'] ?? false)) continue; $stocks = [date('Y-m-d H:i:s')];
+                if(!strlen($sku['barcode'] ?? false)) continue; //$stocks = [date('Y-m-d H:i:s')];
 
                 foreach($sku['warehouses'] as $stock)
                 {
-                    $stocks[$stock['warehouseName']] = $stock['quantity'];
+                    //$stocks[$stock['warehouseName']] = $stock['quantity'];
 
                     $this->results[ModelFBOStocks::class][$hash = md5($stock['warehouseName'])] ??= [
                         'last_request' => date('Y-m-d H:i:s'),

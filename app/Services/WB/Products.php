@@ -3,14 +3,12 @@
 use App\Exceptions\Http\ErrorException;
 use App\Helpers\Time;
 use App\Models\Dev\Logs;
-use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\Schedule;
 use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
 use App\Services\Traits\{Queries, Repeater, Tracker};
 use ErrorException as NativeErrorException;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -41,14 +39,19 @@ class Products extends MSAbstract
     {
         /** @var string|Model $class */
 
-        $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
         $tvend_pid = Cache::remember('wb_tvend_pid', 3600, fn() => Settings::whereLike('variable', 'tnved:pid')->pluck('value')->first() * 1 ?: 15000001);
         $zero_properties = Cache::remember('wb_zero_properties', 3600, fn() => array_fill_keys(Properties::query()->whereLike('count', 0)->pluck('id')->all(), true));
 
         if($this->operation->counter === 1)
         {
-            foreach ([ModelProducts::class, Sizes::class] as $class) $this->updateInstances($class::query()->whereHas('token', fn(Builder $b) => $b->whereJsonContains('days', $day))); Categories::query()->update(['cnt' => 0]);
+            foreach ([ModelProducts::class, Sizes::class] as $class)
+            {
+                $this->updateInstances($class::query()->whereIn('tid', array_keys($manager->source->all())));
+            }
+
+            Categories::query()->update(['cnt' => 0]);
         }
 
         foreach($this->cursors = Cache::get($this->hash) ?? [] as $operator => $cursors) foreach ($cursors as $tid => $cursor) if($cursor === false) $this->skip[$operator][$tid] = true;
@@ -71,9 +74,9 @@ class Products extends MSAbstract
                     1, 2 => 100, 3 => 75, 4, 5 => 50, default => 30
                 };
 
-                foreach($manager->source->all('WB') as $tid => $token)
+                foreach($manager->source->all() as $tid => $token)
                 {
-                    if(!in_array($day, $token->days) || ($this->skip[$operator][$tid] ?? false)) continue; $post['settings']['cursor'] = compact('limit') + ($this->cursors[$operator][$tid] ?? []);
+                    if($this->skip[$operator][$tid] ?? false) continue; $post['settings']['cursor'] = compact('limit') + ($this->cursors[$operator][$tid] ?? []);
 
                     $manager->enqueue($endpoint, $token, 'post', $post, $operator, $tid);
                 }
@@ -219,7 +222,7 @@ class Products extends MSAbstract
             Log::channel('wb')->info(implode(' | ', ['WB Products Iteration', $this->operation->counter, Time::during(time() - $start)])); Cache::set($this->hash, $this->cursors, 1800); return;
         }
 
-        MarketplaceApiKey::query()->where('marketplace', 'WB')->update(['active' => 'Y']); Cache::delete($this->hash);
+        Cache::delete($this->hash);
 
         Log::channel('wb')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB Products', ...Arr::map($this->counts(ModelProducts::class), fn($v, $k) => $k.': '.$v)]));

@@ -18,13 +18,13 @@ class Proxies extends SourceAbstract
 
     public string $utype = 'mobile';
 
-    public function __construct(ModelProxies $proxies, Agents $agents)
+    public function __construct()
     {
-        foreach($proxies->whereLike('active', 'Y')->orderBy('last_request')->get(['id', 'ip', 'port', 'user', 'pass', 'type']) as $proxy) /** @var ModelProxies $proxy */ $this->proxies[$proxy->type][] = $proxy;
+        foreach(ModelProxies::query()->whereLike('active', 'Y')->orderBy('last_request')->get(['id', 'ip', 'port', 'user', 'pass', 'type']) as $proxy) /** @var ModelProxies $proxy */ $this->proxies[$proxy->type][] = $proxy;
 
         $this->skip = fn(array $attributes) => $attributes['proxy'] instanceof ModelProxies ? $attributes['proxy']->id : null;
 
-        foreach($agents->all() as $agent) /** @var Agents $agent */ $this->agents[$agent->type][] = $agent;
+        foreach(Agents::query()->get() as $agent) /** @var Agents $agent */ $this->agents[$agent->type][] = $agent;
 
         foreach(['success', 'abort'] as $state) $this->{$state} = fn(HttpAbstract $e) => $e->proxy instanceof ModelProxies && $e->proxy->inset($state);
 
@@ -48,24 +48,24 @@ class Proxies extends SourceAbstract
         $values[] = mt_rand(0, count(Arr::get($this->{$name}, ...$values)) - 1); return Arr::get($this->{$name}, ...$values);
     }
 
-    public function enqueue(string $endpoint, $data = null, string $method = 'get', mixed $post = null, ...$custom): void
+    public function enqueue(string $endpoint, mixed $node = null, string $method = 'get', mixed $post = null, ...$custom): void
     {
         /**
          * @var ModelProxies|null $proxy
          * @var Agents $agent
          */
 
-        [$proxy, $agent] = match(gettype($data))
+        [$proxy, $agent] = match(gettype($node))
         {
-            'array' => $data, 'NULL' => [count($this->proxies) ? $this->rand('proxies', $this->ptype) : null, $this->rand('agents', $this->utype)],
-            'object' => match(get_class($data))
+            'array' => $node, 'NULL' => [count($this->proxies) ? $this->rand('proxies', $this->ptype) : null, $this->rand('agents', $this->utype)],
+            'object' => match(get_class($node))
             {
-                ModelProxies::class => [$data, $this->rand('agents', $this->utype)],
-                Agents::class => [$this->rand('proxies', $this->ptype), $data]
+                ModelProxies::class => [$node, $this->rand('agents', $this->utype)],
+                Agents::class => [$this->rand('proxies', $this->ptype), $node]
             },
         };
 
-        $this->queue->enqueue(array_filter(['as' => $key = (string) Str::uuid(), 'withUserAgent' => $agent->name, 'withOptions' => $proxy, $method => [$endpoint, $post]], 'boolval'));
+        $this->manager->queue->enqueue(array_filter(['as' => $key = (string) Str::uuid(), 'withUserAgent' => $agent->name, 'withOptions' => $proxy, $method => [$endpoint, $post]], 'boolval'));
 
         $this->attributes[$key] = [compact('endpoint', 'proxy', 'agent', 'method', 'post'), ...$custom]; $proxy instanceof ModelProxies && $proxy->increment('process');
 

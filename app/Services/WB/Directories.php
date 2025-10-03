@@ -43,7 +43,11 @@ class Directories extends MSAbstract
             ];
         });
 
-        if(count($this->results)): PV::shortUpsert($this->results); Logs::query()->where('entity', 'wb_pv')->delete(); $this->operation->update(['next_start' => null, 'counter' => 0]); endif;
+        PV::shortUpsert($this->results);
+
+        Logs::query()->where('entity', 'wb_pv')->delete();
+
+        $this->operation->update(['next_start' => null, 'counter' => 0]);
 
         Log::channel('wb')->info(implode(' | ', ['WB Directories', Time::during(time() - $start)]));
     }

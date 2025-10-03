@@ -1,6 +1,5 @@
 <?php namespace App\Services\OZON;
 
-use App\Exceptions\Http\ErrorException;
 use App\Helpers\Time;
 use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\OZON\{FBSAmounts, FBSStocks as ModelFBSStocks, Prices};
@@ -8,25 +7,29 @@ use App\Models\Dev\Traits\CustomQueries;
 use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
-use App\Services\Traits\{Queries, Repeater};
+use App\Services\Traits\Queries;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class FBSStocks extends MSAbstract
 {
-    use Queries, Repeater;
+    use Queries;
 
     /** @var int[] */
     private array $last_skus = [];
-
-    protected const limit = 10;
 
     public function __invoke(): void
     {
         /** @var CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class);
 
-        $this->updateInstances(ModelFBSStocks::query()); FBSAmounts::query()->truncate();
+        $this->updateInstances(ModelFBSStocks::query()->whereIn('tid', array_keys($manager->source->all()))); FBSAmounts::query()->truncate();
+
+        $manager->source->throw = function(Throwable $e, $attributes, ...$data) use ($manager)
+        {
+            $manager->enqueue(...array_values($attributes), ...$data); $attributes['token']->inset('abort');
+        };
 
         //////////////////
         /// GET STOCKS ///
@@ -70,9 +73,9 @@ class FBSStocks extends MSAbstract
                     'total' => 0
                 ];
             }
-            catch (\Throwable $e)
+            catch (Throwable $e)
             {
-                Log::channel('error')->error(['OZON FBS Stocks', $response->body(), (string) $e]); throw $this->isAccess($token) ? $e : new ErrorException($response);
+                Log::channel('error')->error(['OZON FBS Stocks', $response->body(), $e->getMessage()]); throw $e;
             }
         });
 
@@ -84,7 +87,7 @@ class FBSStocks extends MSAbstract
         {
             /** @var MarketplaceApiKey $token */ $stamp = floor(microtime(true) * 1000);
 
-            foreach($manager->source->all('OZON') as $token)
+            foreach($manager->source->all() as $token)
             {
                 if(($last_sku = Arr::get($this->last_skus, $token->id)) === false) continue;
 
@@ -98,10 +101,8 @@ class FBSStocks extends MSAbstract
 
             if(!$manager->count()) break;
 
-            $manager->init(function(Response $response, array $attributes)
+            $manager->init(function(Response $response)
             {
-                /** @var MarketplaceApiKey $token */ $token = $attributes['token'];
-
                 try
                 {
                     foreach($response->json('result') as $amount)
@@ -121,9 +122,9 @@ class FBSStocks extends MSAbstract
                         }
                     }
                 }
-                catch (\Throwable $e)
+                catch (Throwable $e)
                 {
-                    Log::channel('error')->error(['OZON FBS Amounts', $response->body(), (string) $e]); throw $this->isAccess($token) ? $e : new ErrorException($response);
+                    Log::channel('error')->error(['OZON FBS Amounts', $response->body(), $e->getMessage()]); throw $e;
                 }
             });
 

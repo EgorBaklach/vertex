@@ -26,9 +26,14 @@ class Prices extends MSAbstract
 
     public function __invoke(): void
     {
-        $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+        /** @var string|Model $class */
 
-        foreach([Sizes::class, ModelPrices::class] as $class) /** @var Model $class */ $this->updateInstances($class::query()->whereHas('token', fn(Builder $b) => $b->whereJsonContains('days', $day)));
+        $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+
+        foreach([Sizes::class, ModelPrices::class] as $class)
+        {
+            $this->updateInstances($class::query()->whereIn('tid', array_keys($manager->source->all())));
+        }
 
         $DB->statement('SET FOREIGN_KEY_CHECKS=0;');
 
@@ -41,9 +46,9 @@ class Prices extends MSAbstract
                 1 => 1000, 2 => 500, 3 => 333, 4 => 250, 5 => 200, default => 100
             };
 
-            foreach($manager->source->all('WB') as $tid => $token)
+            foreach($manager->source->all() as $tid => $token)
             {
-                if(in_array($day, $token->days) && Arr::get($this->offsets, $tid) !== false)
+                if(Arr::get($this->offsets, $tid) !== false)
                 {
                     $this->endpoint(Tokens::class, http_build_query(compact('limit') + ['offset' => $this->offsets[$tid] ??= 0]), $token);
                 }
@@ -87,10 +92,13 @@ class Prices extends MSAbstract
         Log::channel('wb')->info(implode(' | ', ['RESULTS', Time::during(time() - $start)]));
         Log::channel('wb')->info(implode(' | ', ['WB Prices', ...Arr::map($this->counts(ModelPrices::class), fn($v, $k) => $k.': '.$v)]));
 
-        if($new_count = ModelPrices::query()->where('active', 'Y')->whereDoesntHave('sizes')->count()) Log::channel('wb')->info('WB New Products: '.$new_count);
+        foreach(ModelPrices::query()->where('active', 'Y')->whereDoesntHave('sizes')->groupBy('tid')->with('token')->select('tid', DB::raw('count(*) as cnt'))->get() as $value)
+        {
+            Log::channel('wb')->info(implode(' | ', ['WB New Products', $value->token->name, $value->cnt]));
+        }
 
         Schedule::shortUpsert([
-            ['market' => 'WB', 'operation' => 'PRICES', 'next_start' => strtotime('today 12:00') > $this->operation->next_start ? strtotime('today 15:00') : null, 'counter' => 0],
+            ['market' => 'WB', 'operation' => 'PRICES', 'next_start' => strtotime('today 12:00') > $this->operation->start ? strtotime('today 15:00') : null, 'counter' => 0],
             ['market' => 'WB', 'operation' => 'WB_PRICES', 'next_start' => time(), 'counter' => 0]
         ]);
     }

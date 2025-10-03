@@ -1,7 +1,6 @@
 <?php namespace App\Services\YM;
 
-use App\Exceptions\Http\ErrorException;
-use App\Helpers\{Arr, Func, Time};
+use App\Helpers\{Arr, Time};
 use App\Models\Dev\MarketplaceApiKey;
 use App\Models\Dev\Schedule;
 use App\Models\Dev\Traits\CustomQueries;
@@ -23,8 +22,7 @@ use App\Services\APIManager;
 use App\Services\MSAbstract;
 use App\Services\Sources\Tokens;
 use Illuminate\Database\Connection;
-use Illuminate\Support\Facades\Storage;
-use App\Services\Traits\{Queries, Repeater, Tracker};
+use App\Services\Traits\{Queries, Tracker};
 use App\Services\YM\Traits\RecommendationFields;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\Response;
@@ -337,13 +335,18 @@ class Products extends MSAbstract
 
     public function __invoke(): void
     {
-        /** @var string|Model|CustomQueries $class */ $start = time(); $day = date('N') * 1; $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
+        /** @var string|Model|CustomQueries $class */ $start = time(); $manager = $this->endpoint(Tokens::class, APIManager::class); $DB = DB::connection('dev');
 
         $this->fields = Arr::map($this->fields, fn($v, $k) => DB::raw($v ? 'CASE WHEN `active`=\'Y\' THEN `'.$k.'` ELSE VALUES(`'.$k.'`) END' : 'VALUES(`'.$k.'`)'));
 
         foreach(self::classes as $class => $value) match ($value['method'])
         {
-            'update' => $this->updateInstances($class::query()), 'truncate' => $class::query()->truncate(), default => null
+            'update' => $this->updateInstances(match($class)
+            {
+                ModelProducts::class => $class::query()->whereIn('tid', array_keys($manager->source->all())), default => $class::query()
+            }),
+            'truncate' => $class::query()->truncate(),
+            default => null
         };
 
         Recommendations::query()->where('product_offer_id', '!=', '0')->delete(); Categories::query()->update(['cnt' => 0]);
@@ -360,10 +363,8 @@ class Products extends MSAbstract
 
         while(true)
         {
-            foreach($manager->source->all('YM') as $token)
+            foreach($manager->source->all() as $token)
             {
-                //if(!in_array($day, $token->days)) continue;
-
                 foreach([0, 1] as $archived)
                 {
                     if($query = $this->cursors[$token->id]['mappings'][$archived] ?? $this->encode())

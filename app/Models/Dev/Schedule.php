@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $market
  * @property string $operation
  * @property int|null $next_start
+ * @property int|null $start
  * @property int $counter
  * @property int $ttl
  * @property string $command
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\Model;
  * @method static Builder<static>|Schedule whereId($value)
  * @method static Builder<static>|Schedule whereOperation($value)
  * @method static Builder<static>|Schedule whereNextStart($value)
+ * @method static Builder<static>|Schedule whereStart($value)
  * @method static Builder<static>|Schedule whereCounter($value)
  * @method static Builder<static>|Schedule whereCommand($value)
  * @mixin Builder
@@ -41,6 +43,7 @@ class Schedule extends Model
         'market',
         'operation',
         'next_start',
+        'start',
         'ttl',
         'counter',
         'command'

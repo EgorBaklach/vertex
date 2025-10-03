@@ -12,6 +12,14 @@
                     @endforeach
                 </div>
             @endif
+            @if(count($this->stats['runners'] ?? []))
+                <div class="mb-4">
+                    <h2 class="mb-2">ОПЕРАЦИИ ЗАПУЩЕННЫЕ В РУЧНОМ РЕЖИМЕ</h2>
+                    @foreach($this->stats['runners'] as $market => $operation)
+                        <div class="mb-2">{{$market}}: <span class="text-gray-500">{{$operation}}</span></div>
+                    @endforeach
+                </div>
+            @endif
             @if(count($this->stats['processes'] ?? []))
                 <h2 class="mb-2">ОПЕРАЦИИ ЗАПУЩЕННЫЕ НА ДАННЫЙ МОМЕНТ</h2>
                 @foreach($this->stats['processes'] as $market => $operations)
